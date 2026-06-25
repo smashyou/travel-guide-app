@@ -26,6 +26,10 @@
       <h1>Philadelphia <span>in 2 days</span></h1>
       <p class="hero-dates">Center City · Tue Jun 30 – Wed Jul 1, 2026</p>
       <p class="hero-sub">My personal favorites <span class="dot john"></span> plus some also-recommended local picks <span class="dot alt"></span>. Tap any place for addresses, phones, reviews &amp; directions.</p>
+      <div class="hero-actions">
+        <button id="plan-btn" class="hero-btn primary">📋 See the 2-day plan</button>
+        <button id="share-btn" class="hero-btn">🔗 Share this guide</button>
+      </div>
     </div>
   </header>
 
@@ -87,6 +91,15 @@
 
   <!-- Transport tips -->
   <section id="transport-tips" class="transport-tips"></section>
+
+  <section id="itinerary" class="itinerary" hidden>
+    <div class="itin-head">
+      <h2>Your 2-day plan</h2>
+      <button id="itin-close" class="hero-btn">✕ Back to all places</button>
+    </div>
+    <p class="itin-intro">A suggested route that works around this week's closures &amp; festival crowds. Tap any place to jump to its full details. Times are loose — go at your own pace.</p>
+    <div id="itin-days"></div>
+  </section>
 
   <main class="layout">
     <div id="list-pane" class="list-pane">

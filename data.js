@@ -931,6 +931,61 @@ const TRANSPORT = {
   },
 };
 
+// Booking deep-links (verified). id -> { platform, url }
+const BOOKING = {
+  suraya:    { platform: "Resy",        url: "https://resy.com/cities/philadelphia-pa/venues/suraya" },
+  doubleknot:{ platform: "Resy",        url: "https://resy.com/cities/philadelphia-pa/venues/doubleknot" },
+  vernick:   { platform: "Resy",        url: "https://resy.com/cities/philadelphia-pa/venues/vernick-food-and-drink" },
+  vernickfish:{ platform: "OpenTable",  url: "https://www.opentable.com/r/vernick-fish-philadelphia" },
+  alpenrose: { platform: "Resy",        url: "https://resy.com/cities/philadelphia-pa/venues/alpen-rose" },
+  zama:      { platform: "Resy",        url: "https://resy.com/cities/philadelphia-pa/venues/zama" },
+  morimoto:  { platform: "OpenTable",   url: "https://www.opentable.com/morimoto-philadelphia" },
+  jeangeorges:{ platform: "OpenTable",  url: "https://www.opentable.com/r/jean-georges-philadelphia-1" },
+  skyhigh:   { platform: "OpenTable",   url: "https://www.opentable.com/r/skyhigh-philadelphia" },
+  parc:      { platform: "OpenTable",   url: "https://www.opentable.com/parc" },
+  rouge:     { platform: "Resy",        url: "https://resy.com/cities/philadelphia-pa/venues/rouge" },
+  mulherins: { platform: "Resy",        url: "https://resy.com/cities/philadelphia-pa/venues/wm-mulherins-sons" },
+  talulas:   { platform: "OpenTable",   url: "https://www.opentable.com/talulas-garden" },
+  elvez:     { platform: "OpenTable",   url: "https://www.opentable.com/el-vez" },
+  assembly:  { platform: "Tock",        url: "https://www.exploretock.com/thelogan" },
+  zahav:     { platform: "Resy",        url: "https://resy.com/cities/philadelphia-pa/venues/zahav" },
+  independencehall: { platform: "Tickets", url: "https://www.recreation.gov/ticket/234639/ticket/90" },
+  cityhall:  { platform: "Tickets",     url: "https://www.phlvisitorcenter.com/CityHallTowerTour" },
+  magicgardens:{ platform: "Tickets",   url: "https://www.phillymagicgardens.org/hours-and-admission/general-admission-tickets/" },
+};
+
+// Suggested 2-day plan (routes around closures). Blocks reference place ids.
+const ITINERARY = {
+  tue: {
+    label: "Tue · Jun 30",
+    heading: "Day 1 — Historic Philly + cheesesteaks + Fishtown dinner",
+    note: "DAWA is open today only (closed Wed), so dinner Fishtown today. Angelo's & Magic Gardens are closed today — saved for tomorrow.",
+    blocks: [
+      { time: "8:00 AM", title: "Breakfast — Reading Terminal Market", ids: ["rtm", "beilers", "dinics"], desc: "Start early before the crowds. Beiler's doughnut + a Tommy DiNic's roast pork." },
+      { time: "9:30 AM", title: "Liberty Bell & Independence Hall", ids: ["libertybell", "independencehall"], desc: "Go early — festival week is busy. Book the Independence Hall timed ticket in advance." },
+      { time: "11:00 AM", title: "Old City wander", ids: ["elfreths", "wawa"], desc: "Cobblestone Elfreth's Alley, then duck into the flagship Wawa for the touchscreen-hoagie experience." },
+      { time: "12:30 PM", title: "Lunch — John's Roast Pork", ids: ["johnsroastpork"], desc: "Cheesesteak AND the roast pork. Cash only, closes 5 PM. (Angelo's is closed Tuesdays.)" },
+      { time: "2:30 PM", title: "Center City sights", ids: ["lovepark", "cityhall", "rittenhouse"], desc: "LOVE Park photo, ride the City Hall tower for the skyline, relax in Rittenhouse Square." },
+      { time: "5:30 PM", title: "Sunset drink with a view", ids: ["skyhigh", "assembly"], desc: "SkyHigh (60th floor) or the Assembly rooftop — walk-in to the bar." },
+      { time: "7:30 PM", title: "Dinner — Fishtown", ids: ["dawa", "suraya", "mulherins"], desc: "DAWA today (closed tomorrow). Or book Suraya / Wm. Mulherin's nearby." },
+    ],
+  },
+  wed: {
+    label: "Wed · Jul 1",
+    heading: "Day 2 — Brunch, the Parkway, art & a farewell dinner",
+    note: "Magic Gardens & Angelo's are open today. Real brunch spots since your weekend favorites are weekday-closed.",
+    blocks: [
+      { time: "9:00 AM", title: "Brunch", ids: ["middlechild", "sabrinas"], desc: "Middle Child's award-winning breakfast sandwich, or Sabrina's giant stuffed French toast." },
+      { time: "10:30 AM", title: "Rocky Steps & the Parkway", ids: ["pma"], desc: "Run the steps (free, anytime) — museum interior is closed today, but the view & statue aren't." },
+      { time: "12:00 PM", title: "Coffee & sweets near Rittenhouse", ids: ["kfar", "federaldonuts"], desc: "K'Far babka or a hot Federal Donut." },
+      { time: "1:00 PM", title: "Lunch — Angelo's", ids: ["angelos"], desc: "Open today: get the Cooper Sharp cheesesteak. Cash only, expect a line." },
+      { time: "2:30 PM", title: "Magic Gardens & South Street", ids: ["magicgardens"], desc: "Open today — book a timed ticket. Wander South Street after." },
+      { time: "5:00 PM", title: "Rittenhouse patio drink", ids: ["rittenhouse", "parc", "rouge"], desc: "People-watch from Parc or Rouge's sidewalk before dinner." },
+      { time: "7:00 PM", title: "Farewell dinner (book ahead!)", ids: ["zahav", "vernick", "morimoto", "doubleknot"], desc: "The big one — reserve Zahav, Vernick, Morimoto or Double Knot well in advance." },
+    ],
+  },
+};
+
 // Airport → Center City quick reference
 const AIRPORT = [
   { mode: "SEPTA Airport Line (train)", cost: "$5", time: "~20–26 min", note: "Best value. ~Every 30 min to 30th St / Suburban / Jefferson stations." },

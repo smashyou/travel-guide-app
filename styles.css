@@ -42,6 +42,11 @@ h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; margin: 0; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin: 0 2px; }
 .dot.john { background: var(--bell); }
 .dot.alt { background: #6aa3e0; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.hero-btn { border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.08); color: #fff; padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; font-family: inherit; transition: all .12s ease; }
+.hero-btn:hover { background: rgba(255,255,255,.16); }
+.hero-btn.primary { background: var(--bell); color: var(--navy); border-color: var(--bell); }
+.hero-btn.primary:hover { filter: brightness(1.05); }
 
 /* ---------- Banner ---------- */
 .banner {
@@ -159,6 +164,30 @@ h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; margin: 0; }
 .act-dir { background: var(--navy); color: #fff; }
 .act-map { background: #eef1f6; color: var(--navy); }
 .act-site { background: #f0eee9; color: #5a5347; }
+.act-book { background: var(--bell); color: var(--navy); }
+
+/* ---------- Itinerary ---------- */
+.itinerary { max-width: 1180px; margin: 16px auto 0; padding: 0 16px 40px; }
+.itin-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.itin-head h2 { font-size: 26px; }
+.itin-head .hero-btn { border-color: var(--line); background: #fff; color: var(--navy); }
+.itin-intro { color: var(--muted); font-size: 14px; margin: 6px 0 18px; max-width: 680px; }
+#itin-days { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.itin-day { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.itin-day-head { background: linear-gradient(160deg, var(--navy), var(--navy-2)); color: #fff; padding: 16px 18px; }
+.itin-day-head .pill { display: inline-block; background: var(--bell); color: var(--navy); font-weight: 700; font-size: 12px; padding: 3px 10px; border-radius: 999px; margin-bottom: 8px; }
+.itin-day-head h3 { font-size: 18px; line-height: 1.2; }
+.itin-day-head p { margin: 8px 0 0; font-size: 12.5px; color: #cdd7e6; }
+.itin-blocks { padding: 6px 18px 18px; }
+.itin-block { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.itin-block:last-child { border-bottom: none; }
+.itin-time { font-weight: 700; font-size: 12.5px; color: var(--red); padding-top: 2px; }
+.itin-block h4 { font-family: 'Inter', sans-serif; font-size: 15px; margin: 0 0 3px; }
+.itin-block .bdesc { font-size: 12.5px; color: #50607a; margin: 0 0 8px; }
+.itin-places { display: flex; flex-wrap: wrap; gap: 6px; }
+.itin-chip { border: 1px solid var(--line); background: #f8f9fc; border-radius: 999px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--navy); display: inline-flex; align-items: center; gap: 5px; }
+.itin-chip:hover { border-color: var(--bell); background: #fff; }
+.itin-chip .ichip-dot { width: 8px; height: 8px; border-radius: 50%; }
 
 /* ---------- Airport / footer ---------- */
 .airport { margin-top: 18px; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 4px 16px; box-shadow: var(--shadow); }
@@ -180,6 +209,8 @@ h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; margin: 0; }
 /* ---------- Mobile ---------- */
 @media (max-width: 860px) {
   .layout { grid-template-columns: 1fr; }
+  #itin-days { grid-template-columns: 1fr; }
+  .hero-actions .hero-btn { flex: 1; }
   .map-pane { position: fixed; inset: 0; top: 0; height: 100vh; z-index: 50; display: none; padding: 0; }
   .map-pane.show { display: block; }
   #map { border-radius: 0; height: 100vh; }

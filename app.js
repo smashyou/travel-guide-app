@@ -87,6 +87,13 @@ function priceStr(p) {
   return "$".repeat(p.priceLevel);
 }
 
+function bookHTML(p) {
+  const b = (typeof BOOKING !== "undefined") && BOOKING[p.id];
+  if (!b) return "";
+  const label = b.platform === "Tickets" ? "🎟️ Book tickets" : "📅 Reserve · " + b.platform;
+  return `<a class="act act-book" href="${b.url}" target="_blank" rel="noopener">${label}</a>`;
+}
+
 function cardHTML(p) {
   const di = dayInfo(p);
   const showDay = state.day !== "any";
@@ -133,6 +140,7 @@ function cardHTML(p) {
     <div class="reviews">${reviews}</div>
 
     <div class="card-actions">
+      ${bookHTML(p)}
       <a class="act act-dir" href="${dirUrl(p)}" target="_blank" rel="noopener">${TRANSPORT[state.transport].emoji} Directions</a>
       <button class="act act-map" data-focus="${p.id}">🗺️ Show on map</button>
       ${p.website ? `<a class="act act-site" href="${p.website}" target="_blank" rel="noopener">🌐 Website</a>` : ""}
@@ -289,6 +297,68 @@ function renderAirport() {
     `</tbody></table>`;
 }
 
+/* ---------- Itinerary ---------- */
+function renderItinerary() {
+  el("itin-days").innerHTML = ["tue", "wed"].map(key => {
+    const d = ITINERARY[key];
+    const blocks = d.blocks.map(b => {
+      const chips = b.ids.map(id => {
+        const p = PLACES.find(x => x.id === id);
+        if (!p) return "";
+        return `<button class="itin-chip" data-goto="${id}"><span class="ichip-dot" style="background:${catColor[p.category]}"></span>${p.source === "john" ? "🔔 " : ""}${p.name}</button>`;
+      }).join("");
+      return `<div class="itin-block">
+        <div class="itin-time">${b.time}</div>
+        <div><h4>${b.title}</h4><p class="bdesc">${b.desc}</p><div class="itin-places">${chips}</div></div>
+      </div>`;
+    }).join("");
+    return `<div class="itin-day">
+      <div class="itin-day-head"><span class="pill">${d.label}</span><h3>${d.heading}</h3><p>${d.note}</p></div>
+      <div class="itin-blocks">${blocks}</div>
+    </div>`;
+  }).join("");
+
+  document.querySelectorAll("[data-goto]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      closeItinerary();
+      const id = btn.dataset.goto;
+      setTimeout(() => {
+        const card = document.getElementById("card-" + id);
+        if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" });
+          card.classList.add("highlight"); setTimeout(() => card.classList.remove("highlight"), 1800); }
+      }, 60);
+    }));
+}
+function openItinerary() {
+  renderItinerary();
+  el("itinerary").hidden = false;
+  document.querySelector(".layout").style.display = "none";
+  el("transport-tips").style.display = "none";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function closeItinerary() {
+  el("itinerary").hidden = true;
+  document.querySelector(".layout").style.display = "";
+  el("transport-tips").style.display = "";
+}
+
+/* ---------- Share ---------- */
+async function share() {
+  const url = location.href.split("#")[0];
+  const data = { title: "Philly Guide — your 2-day visit", text: "A hand-built guide to eating & exploring Philadelphia 🔔", url };
+  if (navigator.share) {
+    try { await navigator.share(data); return; } catch (e) { if (e.name === "AbortError") return; }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    flashShare("🔗 Link copied!");
+  } catch (e) { flashShare(url); }
+}
+function flashShare(msg) {
+  const btn = el("share-btn"); const orig = btn.textContent;
+  btn.textContent = msg; setTimeout(() => btn.textContent = orig, 1800);
+}
+
 /* ---------- Mobile map view ---------- */
 function enterMap() {
   el("map-pane").classList.add("show");
@@ -353,6 +423,11 @@ function init() {
   // view toggle (mobile)
   el("view-map").addEventListener("click", enterMap);
   el("view-list").addEventListener("click", exitMap);
+
+  // itinerary + share
+  el("plan-btn").addEventListener("click", openItinerary);
+  el("itin-close").addEventListener("click", closeItinerary);
+  el("share-btn").addEventListener("click", share);
 
   // map close button (mobile)
   const closeBtn = document.createElement("button");
