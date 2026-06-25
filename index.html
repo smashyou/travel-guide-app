@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <meta name="theme-color" content="#0b1f3a" />
+  <meta name="description" content="A friend's hand-built guide to eating & exploring Center City Philadelphia — June 30–July 1, 2026." />
+  <title>Philly Guide · for your visit 🔔</title>
+
+  <!-- Leaflet (maps) from CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="hero-kicker">A guide built just for you 🔔</p>
+      <h1>Philadelphia <span>in 2 days</span></h1>
+      <p class="hero-dates">Center City · Tue Jun 30 – Wed Jul 1, 2026</p>
+      <p class="hero-sub">My personal favorites <span class="dot john"></span> plus some also-recommended local picks <span class="dot alt"></span>. Tap any place for addresses, phones, reviews &amp; directions.</p>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden>
+    <div class="banner-text">
+      <strong id="banner-title"></strong>
+      <p id="banner-body"></p>
+    </div>
+    <button id="banner-close" aria-label="Dismiss">×</button>
+  </div>
+
+  <!-- Controls -->
+  <section class="controls" aria-label="Filters and location">
+    <div class="control-row location-row">
+      <button id="locate-btn" class="btn btn-locate">📍 Find places near me</button>
+      <div class="addr-wrap">
+        <input id="addr-input" type="text" placeholder="…or type your hotel / address" autocomplete="off" />
+        <button id="addr-go" class="btn btn-go">Go</button>
+      </div>
+    </div>
+    <p id="loc-status" class="loc-status" hidden></p>
+
+    <div class="control-row">
+      <span class="control-label">Getting around</span>
+      <div id="transport-seg" class="segmented" role="tablist"></div>
+    </div>
+
+    <div class="control-row">
+      <span class="control-label">Which day</span>
+      <div id="day-seg" class="segmented day-seg" role="tablist">
+        <button class="seg-btn active" data-day="any">Either day</button>
+        <button class="seg-btn" data-day="tue">Tue Jun 30</button>
+        <button class="seg-btn" data-day="wed">Wed Jul 1</button>
+      </div>
+      <label class="open-only">
+        <input type="checkbox" id="open-only" /> Open only
+      </label>
+    </div>
+
+    <div class="control-row">
+      <span class="control-label">Whose pick</span>
+      <div id="source-seg" class="segmented" role="tablist">
+        <button class="seg-btn active" data-source="all">All</button>
+        <button class="seg-btn" data-source="john">🔔 John's picks</button>
+        <button class="seg-btn" data-source="alt">✨ Also recommended</button>
+      </div>
+    </div>
+
+    <div id="cat-chips" class="chips" aria-label="Categories"></div>
+
+    <div class="control-row search-row">
+      <input id="search" type="search" placeholder="🔎 Search (e.g. sushi, brunch, cheesesteak)…" />
+      <div class="view-toggle">
+        <button id="view-list" class="seg-btn active">☰ List</button>
+        <button id="view-map" class="seg-btn">🗺️ Map</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Transport tips -->
+  <section id="transport-tips" class="transport-tips"></section>
+
+  <main class="layout">
+    <div id="list-pane" class="list-pane">
+      <p id="result-count" class="result-count"></p>
+      <div id="cards"></div>
+      <details class="airport">
+        <summary>✈️ Getting from PHL Airport to Center City</summary>
+        <div id="airport-table"></div>
+      </details>
+      <footer class="footer">
+        <p>Made with love for your trip. Reviews aggregated from Google, Yelp, Tripadvisor, OpenTable &amp; more (snapshots — verify current hours before you go).</p>
+      </footer>
+    </div>
+    <div id="map-pane" class="map-pane">
+      <div id="map"></div>
+    </div>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
