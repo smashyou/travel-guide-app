@@ -297,40 +297,133 @@ function renderAirport() {
     `</tbody></table>`;
 }
 
-/* ---------- Itinerary ---------- */
-function renderItinerary() {
-  el("itin-days").innerHTML = ["tue", "wed"].map(key => {
-    const d = ITINERARY[key];
-    const blocks = d.blocks.map(b => {
-      const chips = b.ids.map(id => {
-        const p = PLACES.find(x => x.id === id);
-        if (!p) return "";
-        return `<button class="itin-chip" data-goto="${id}"><span class="ichip-dot" style="background:${catColor[p.category]}"></span>${p.source === "john" ? "🔔 " : ""}${p.name}</button>`;
-      }).join("");
-      return `<div class="itin-block">
-        <div class="itin-time">${b.time}</div>
-        <div><h4>${b.title}</h4><p class="bdesc">${b.desc}</p><div class="itin-places">${chips}</div></div>
-      </div>`;
+/* ---------- 2-day plan generator (rule-based, no LLM) ---------- */
+const plan = {
+  interests: CATEGORIES.map(c => c.key), // all on by default
+  pace: "balanced",
+  maxPrice: 4,
+  walkInOnly: false,
+};
+const CENTER = { lat: 39.9526, lng: -75.1635 }; // City Hall — default route anchor
+
+function daypartsFor(p) { return DAYPART_OVERRIDE[p.id] || DAYPART_BY_CAT[p.category] || []; }
+
+// Weighted random among the top few candidates (lets "Regenerate" vary while staying good)
+function pickWeighted(sorted) {
+  const top = sorted.slice(0, Math.min(3, sorted.length));
+  const weights = [3, 2, 1].slice(0, top.length);
+  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < top.length; i++) { if ((r -= weights[i]) < 0) return top[i].p; }
+  return top[0].p;
+}
+
+function generateDay(dayKey, usedGlobal) {
+  const slots = PACE_SLOTS[plan.pace];
+  const pool = PLACES.filter(p =>
+    p.tripStatus[dayKey].open &&                                  // hard: open that day
+    p.priceLevel <= plan.maxPrice &&                             // hard: budget
+    !(plan.walkInOnly && p.reservation === "required")          // hard: walk-in only
+  );
+  let anchor = state.user || CENTER;
+  const usedDay = new Set();
+
+  const blocks = slots.map(slot => {
+    const cands = pool.filter(p =>
+      !usedGlobal.has(p.id) && !usedDay.has(p.id) && daypartsFor(p).includes(slot.daypart));
+    const matching = cands.filter(p => plan.interests.includes(p.category));
+    const isMeal = MEAL_DAYPARTS.includes(slot.daypart);
+    // meals always fill (you have to eat); optional slots honor interests strictly
+    const useList = matching.length ? matching : (isMeal ? cands : []);
+    if (!useList.length) return { slot, place: null };
+
+    const a = anchor;
+    const scored = useList.map(p => {
+      let s = 0;
+      if (p.source === "john") s += 3;                  // favor John's picks
+      if (plan.interests.includes(p.category)) s += 4;  // favor chosen interests
+      s -= distMiles(a, p) * 0.6;                        // shorter hops win → a route
+      return { p, s };
+    }).sort((x, y) => y.s - x.s);
+
+    const place = pickWeighted(scored);
+    usedDay.add(place.id); usedGlobal.add(place.id); anchor = place;
+    return { slot, place };
+  });
+
+  const closed = PLACES.filter(p =>
+    p.source === "john" && plan.interests.includes(p.category) && !p.tripStatus[dayKey].open);
+  return { blocks, closed };
+}
+
+function renderPlanConfig() {
+  const interestChips = CATEGORIES.map(c => {
+    const on = plan.interests.includes(c.key);
+    return `<button class="cfg-chip ${on ? "on" : ""}" data-int="${c.key}" style="${on ? "background:" + c.color + ";color:#fff;border-color:transparent" : ""}">${c.emoji} ${c.label}</button>`;
+  }).join("");
+  const seg = (arr, attr, cur) => arr.map(([v, l]) =>
+    `<button class="seg-btn ${String(cur) === String(v) ? "active" : ""}" data-${attr}="${v}">${l}</button>`).join("");
+  const loc = state.user ? "📍 Routed from your location" : "Routed from Center City — set your location above for a tighter route";
+  return `<div class="cfg">
+    <div class="cfg-row"><span class="control-label">Interests</span><div class="cfg-chips">${interestChips}</div></div>
+    <div class="cfg-row"><span class="control-label">Pace</span><div class="segmented">${seg([["relaxed", "🌿 Relaxed"], ["balanced", "⚖️ Balanced"], ["packed", "⚡ Packed"]], "pace", plan.pace)}</div></div>
+    <div class="cfg-row"><span class="control-label">Max budget</span><div class="segmented">${seg([[1, "$"], [2, "$$"], [3, "$$$"], [4, "$$$$"]], "budget", plan.maxPrice)}</div></div>
+    <div class="cfg-row"><span class="control-label">Bookings</span><div class="segmented">${seg([[false, "📅 I'll book ahead"], [true, "✅ Walk-ins only"]], "walk", plan.walkInOnly)}</div></div>
+    <div class="cfg-row cfg-actions"><button id="regen" class="hero-btn primary">🎲 Regenerate</button><span class="cfg-loc">${loc}</span></div>
+  </div>`;
+}
+
+function renderPlan() {
+  el("plan-config").innerHTML = renderPlanConfig();
+  document.querySelectorAll("[data-int]").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.int, i = plan.interests.indexOf(k);
+    if (i >= 0) plan.interests.splice(i, 1); else plan.interests.push(k);
+    renderPlan();
+  }));
+  document.querySelectorAll("[data-pace]").forEach(b => b.addEventListener("click", () => { plan.pace = b.dataset.pace; renderPlan(); }));
+  document.querySelectorAll("[data-budget]").forEach(b => b.addEventListener("click", () => { plan.maxPrice = +b.dataset.budget; renderPlan(); }));
+  document.querySelectorAll("[data-walk]").forEach(b => b.addEventListener("click", () => { plan.walkInOnly = b.dataset.walk === "true"; renderPlan(); }));
+  el("regen") && el("regen").addEventListener("click", renderPlanDays);
+  renderPlanDays();
+}
+
+function renderPlanDays() {
+  const usedGlobal = new Set();
+  el("itin-days").innerHTML = TRIP_DAYS.map(d => {
+    const { blocks, closed } = generateDay(d.key, usedGlobal);
+    const rows = blocks.map(b => {
+      if (!b.place) {
+        return `<div class="itin-block"><div class="itin-time">${b.slot.time}</div><div><h4>${b.slot.label}</h4><p class="bdesc free">Free time — wander &amp; explore ✨</p></div></div>`;
+      }
+      const p = b.place;
+      const resTxt = p.reservation === "walkin" ? "walk-in" : p.reservation === "ticket" ? "ticket" : "reserve";
+      const dTxt = state.user ? " · " + fmtDist(distMiles(state.user, p)) : "";
+      return `<div class="itin-block"><div class="itin-time">${b.slot.time}</div><div>
+        <h4>${b.slot.label}</h4>
+        <button class="itin-chip" data-goto="${p.id}"><span class="ichip-dot" style="background:${catColor[p.category]}"></span>${p.source === "john" ? "🔔 " : ""}${p.name}</button>
+        <p class="bdesc">${catEmoji[p.category]} ${catLabel[p.category]} · ${priceStr(p)} · ${resTxt}${dTxt}</p>
+      </div></div>`;
     }).join("");
+    const closedNote = closed.length
+      ? `<p class="itin-closed">⚠️ Closed ${d.label.split("·")[0].trim()} (skipped): ${closed.map(c => c.name).join(", ")}</p>` : "";
     return `<div class="itin-day">
-      <div class="itin-day-head"><span class="pill">${d.label}</span><h3>${d.heading}</h3><p>${d.note}</p></div>
-      <div class="itin-blocks">${blocks}</div>
+      <div class="itin-day-head"><span class="pill">${d.label}</span><h3>${d.full}</h3>${closedNote}</div>
+      <div class="itin-blocks">${rows}</div>
     </div>`;
   }).join("");
 
-  document.querySelectorAll("[data-goto]").forEach(btn =>
-    btn.addEventListener("click", () => {
-      closeItinerary();
-      const id = btn.dataset.goto;
-      setTimeout(() => {
-        const card = document.getElementById("card-" + id);
-        if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" });
-          card.classList.add("highlight"); setTimeout(() => card.classList.remove("highlight"), 1800); }
-      }, 60);
-    }));
+  document.querySelectorAll("[data-goto]").forEach(btn => btn.addEventListener("click", () => {
+    closeItinerary();
+    const id = btn.dataset.goto;
+    setTimeout(() => {
+      const card = document.getElementById("card-" + id);
+      if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.classList.add("highlight"); setTimeout(() => card.classList.remove("highlight"), 1800); }
+    }, 60);
+  }));
 }
+
 function openItinerary() {
-  renderItinerary();
+  renderPlan();
   el("itinerary").hidden = false;
   document.querySelector(".layout").style.display = "none";
   el("transport-tips").style.display = "none";

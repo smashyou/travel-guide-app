@@ -172,6 +172,18 @@ h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; margin: 0; }
 .itin-head h2 { font-size: 26px; }
 .itin-head .hero-btn { border-color: var(--line); background: #fff; color: var(--navy); }
 .itin-intro { color: var(--muted); font-size: 14px; margin: 6px 0 18px; max-width: 680px; }
+.cfg { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 18px; }
+.cfg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.cfg-row:last-child { margin-bottom: 0; }
+.cfg-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.cfg-chip { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all .12s ease; opacity: .55; }
+.cfg-chip:hover { border-color: var(--bell); }
+.cfg-chip.on { opacity: 1; }
+.cfg-actions { justify-content: space-between; padding-top: 4px; border-top: 1px dashed var(--line); }
+.cfg-loc { font-size: 12.5px; color: var(--muted); }
+.itin-closed { margin: 8px 0 0; font-size: 12px; color: #ffd9d2; font-weight: 600; }
+.bdesc.free { font-style: italic; color: var(--muted); }
+.itin-block .itin-chip { margin-bottom: 5px; }
 #itin-days { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
 .itin-day { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .itin-day-head { background: linear-gradient(160deg, var(--navy), var(--navy-2)); color: #fff; padding: 16px 18px; }

@@ -954,37 +954,64 @@ const BOOKING = {
   magicgardens:{ platform: "Tickets",   url: "https://www.phillymagicgardens.org/hours-and-admission/general-admission-tickets/" },
 };
 
-// Suggested 2-day plan (routes around closures). Blocks reference place ids.
-const ITINERARY = {
-  tue: {
-    label: "Tue · Jun 30",
-    heading: "Day 1 — Historic Philly + cheesesteaks + Fishtown dinner",
-    note: "DAWA is open today only (closed Wed), so dinner Fishtown today. Angelo's & Magic Gardens are closed today — saved for tomorrow.",
-    blocks: [
-      { time: "8:00 AM", title: "Breakfast — Reading Terminal Market", ids: ["rtm", "beilers", "dinics"], desc: "Start early before the crowds. Beiler's doughnut + a Tommy DiNic's roast pork." },
-      { time: "9:30 AM", title: "Liberty Bell & Independence Hall", ids: ["libertybell", "independencehall"], desc: "Go early — festival week is busy. Book the Independence Hall timed ticket in advance." },
-      { time: "11:00 AM", title: "Old City wander", ids: ["elfreths", "wawa"], desc: "Cobblestone Elfreth's Alley, then duck into the flagship Wawa for the touchscreen-hoagie experience." },
-      { time: "12:30 PM", title: "Lunch — John's Roast Pork", ids: ["johnsroastpork"], desc: "Cheesesteak AND the roast pork. Cash only, closes 5 PM. (Angelo's is closed Tuesdays.)" },
-      { time: "2:30 PM", title: "Center City sights", ids: ["lovepark", "cityhall", "rittenhouse"], desc: "LOVE Park photo, ride the City Hall tower for the skyline, relax in Rittenhouse Square." },
-      { time: "5:30 PM", title: "Sunset drink with a view", ids: ["skyhigh", "assembly"], desc: "SkyHigh (60th floor) or the Assembly rooftop — walk-in to the bar." },
-      { time: "7:30 PM", title: "Dinner — Fishtown", ids: ["dawa", "suraya", "mulherins"], desc: "DAWA today (closed tomorrow). Or book Suraya / Wm. Mulherin's nearby." },
-    ],
-  },
-  wed: {
-    label: "Wed · Jul 1",
-    heading: "Day 2 — Brunch, the Parkway, art & a farewell dinner",
-    note: "Magic Gardens & Angelo's are open today. Real brunch spots since your weekend favorites are weekday-closed.",
-    blocks: [
-      { time: "9:00 AM", title: "Brunch", ids: ["middlechild", "sabrinas"], desc: "Middle Child's award-winning breakfast sandwich, or Sabrina's giant stuffed French toast." },
-      { time: "10:30 AM", title: "Rocky Steps & the Parkway", ids: ["pma"], desc: "Run the steps (free, anytime) — museum interior is closed today, but the view & statue aren't." },
-      { time: "12:00 PM", title: "Coffee & sweets near Rittenhouse", ids: ["kfar", "federaldonuts"], desc: "K'Far babka or a hot Federal Donut." },
-      { time: "1:00 PM", title: "Lunch — Angelo's", ids: ["angelos"], desc: "Open today: get the Cooper Sharp cheesesteak. Cash only, expect a line." },
-      { time: "2:30 PM", title: "Magic Gardens & South Street", ids: ["magicgardens"], desc: "Open today — book a timed ticket. Wander South Street after." },
-      { time: "5:00 PM", title: "Rittenhouse patio drink", ids: ["rittenhouse", "parc", "rouge"], desc: "People-watch from Parc or Rouge's sidewalk before dinner." },
-      { time: "7:00 PM", title: "Farewell dinner (book ahead!)", ids: ["zahav", "vernick", "morimoto", "doubleknot"], desc: "The big one — reserve Zahav, Vernick, Morimoto or Double Knot well in advance." },
-    ],
-  },
+// ---- 2-day plan generator config (rule-based, no LLM) ----
+const TRIP_DAYS = [
+  { key: "tue", label: "Tue · Jun 30", full: "Tuesday, June 30" },
+  { key: "wed", label: "Wed · Jul 1", full: "Wednesday, July 1" },
+];
+
+// Which time-of-day blocks each category can fill (overridable per place)
+const DAYPART_BY_CAT = {
+  cheesesteaks: ["lunch", "dinner"],
+  cheap:        ["lunch", "dinner", "snack"],
+  sweets:       ["breakfast", "snack"],
+  casual:       ["breakfast", "lunch", "dinner"],
+  finedining:   ["dinner"],
+  bars:         ["drinks", "dinner"],
+  landmarks:    ["activity"],
 };
+const DAYPART_OVERRIDE = {
+  parc: ["breakfast", "lunch", "dinner"], rouge: ["lunch", "dinner", "drinks"], mulherins: ["dinner"],
+  middlechild: ["breakfast", "lunch"], sabrinas: ["breakfast", "lunch"], elvez: ["lunch", "dinner"],
+  kfar: ["breakfast", "snack"], federaldonuts: ["breakfast", "snack"], beilers: ["breakfast", "snack"],
+  dinics: ["lunch", "snack"], skyhigh: ["breakfast", "drinks", "dinner"], assembly: ["drinks"],
+  jeangeorges: ["dinner"], suraya: ["lunch", "dinner"], zama: ["lunch", "dinner"],
+  vernickfish: ["lunch", "dinner"], doubleknot: ["dinner", "drinks"], dawa: ["lunch", "dinner"],
+  rtm: ["breakfast", "lunch", "activity"], wawa: ["snack", "lunch", "dinner"], halal: ["lunch", "snack", "dinner"],
+  johnsroastpork: ["lunch"], angelos: ["lunch", "dinner"], dalessandros: ["lunch", "dinner"],
+};
+
+// Slot templates per pace. Meal slots always get filled; others respect interests.
+const PACE_SLOTS = {
+  relaxed: [
+    { time: "9:00 AM",  label: "Breakfast",        daypart: "breakfast" },
+    { time: "11:00 AM", label: "Morning sights",   daypart: "activity" },
+    { time: "1:00 PM",  label: "Lunch",            daypart: "lunch" },
+    { time: "3:30 PM",  label: "Afternoon sights", daypart: "activity" },
+    { time: "7:00 PM",  label: "Dinner",           daypart: "dinner" },
+  ],
+  balanced: [
+    { time: "8:30 AM",  label: "Breakfast",        daypart: "breakfast" },
+    { time: "10:00 AM", label: "Morning sights",   daypart: "activity" },
+    { time: "12:30 PM", label: "Lunch",            daypart: "lunch" },
+    { time: "2:30 PM",  label: "Afternoon sights", daypart: "activity" },
+    { time: "4:30 PM",  label: "Coffee / snack break", daypart: "snack" },
+    { time: "6:00 PM",  label: "Sunset drink",     daypart: "drinks" },
+    { time: "7:45 PM",  label: "Dinner",           daypart: "dinner" },
+  ],
+  packed: [
+    { time: "8:00 AM",  label: "Breakfast",        daypart: "breakfast" },
+    { time: "9:30 AM",  label: "Morning sights",   daypart: "activity" },
+    { time: "11:00 AM", label: "Snack stop",       daypart: "snack" },
+    { time: "12:30 PM", label: "Lunch",            daypart: "lunch" },
+    { time: "2:00 PM",  label: "Afternoon sights", daypart: "activity" },
+    { time: "3:30 PM",  label: "More to explore",  daypart: "activity" },
+    { time: "5:00 PM",  label: "Coffee / snack break", daypart: "snack" },
+    { time: "6:00 PM",  label: "Sunset drink",     daypart: "drinks" },
+    { time: "7:30 PM",  label: "Dinner",           daypart: "dinner" },
+  ],
+};
+const MEAL_DAYPARTS = ["breakfast", "lunch", "dinner"];
 
 // Airport → Center City quick reference
 const AIRPORT = [
