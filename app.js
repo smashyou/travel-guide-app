@@ -31,6 +31,8 @@ const S = {
   theme: "A",
   screen: "home",
   cat: null,
+  cuisine: null,
+  query: "",
   day: "any",
   src: "all",
   selected: null,
@@ -70,7 +72,12 @@ function filtered() {
   let list = PLACES.slice();
   if (S.src !== "all") list = list.filter(p => p.source === S.src);
   if (S.cat) list = list.filter(p => p.category === S.cat);
+  if (S.cuisine) list = list.filter(p => p.cuisine.includes(S.cuisine));
   if (S.day !== "any") list = list.filter(p => p.tripStatus[S.day].open);
+  if (S.query) {
+    const q = S.query.toLowerCase();
+    list = list.filter(p => (p.name + " " + p.cuisine.join(" ") + " " + p.blurb + " " + catLabel[p.category]).toLowerCase().includes(q));
+  }
   if (S.user) { list.forEach(p => p._d = distMiles(S.user, p)); list.sort((a, b) => a._d - b._d); }
   else {
     const order = CATEGORIES.map(c => c.key);
@@ -99,19 +106,21 @@ function seg(items, cur, attr) {
 }
 
 function renderFilters() {
-  const dayItems = [["any", "Any"], ["tue", "Tue"], ["wed", "Wed"]];
-  el("sb-day").innerHTML = seg(dayItems, S.day, "day");
+  el("sb-day").innerHTML = seg([["any", "Any"], ["tue", "Tue"], ["wed", "Wed"]], S.day, "day");
   el("hero-day").innerHTML = seg([["any", "Either day"], ["tue", "Tue Jun 30"], ["wed", "Wed Jul 1"]], S.day, "day");
   el("sb-src").innerHTML = seg([["all", "All"], ["john", "🔔 John"]], S.src, "src");
 
   const counts = {};
   PLACES.forEach(p => { if (S.src === "all" || p.source === S.src) counts[p.category] = (counts[p.category] || 0) + 1; });
-  el("sb-cats").innerHTML = CATEGORIES.filter(c => counts[c.key]).map(c =>
-    `<button class="sb-cat ${S.cat === c.key ? "on" : ""}" data-cat="${c.key}"><span class="dot" style="background:${c.color}"></span>${c.label}<span class="c-count">${counts[c.key]}</span></button>`).join("");
+  el("sb-cat").innerHTML = `<option value="">All types</option>` +
+    CATEGORIES.filter(c => counts[c.key]).map(c => `<option value="${c.key}" ${S.cat === c.key ? "selected" : ""}>${c.label} (${counts[c.key]})</option>`).join("");
+  el("sb-cuisine").innerHTML = `<option value="">All cuisines</option>` +
+    cuisineOptions().map(c => `<option value="${esc(c)}" ${S.cuisine === c ? "selected" : ""}>${esc(c)}</option>`).join("");
 
   document.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { S.day = b.dataset.day; update(); }));
   document.querySelectorAll("[data-src]").forEach(b => b.addEventListener("click", () => { S.src = b.dataset.src; update(); }));
-  document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { S.cat = S.cat === b.dataset.cat ? null : b.dataset.cat; S.screen = "browse"; update(); }));
+  el("sb-cat").addEventListener("change", () => { S.cat = el("sb-cat").value || null; update(); });
+  el("sb-cuisine").addEventListener("change", () => { S.cuisine = el("sb-cuisine").value || null; update(); });
 }
 
 /* ===========================================================
@@ -148,33 +157,78 @@ function screenHome() {
     <div class="type-row">${types}</div>`;
 }
 
-// Shared category pill selector (used by Browse + Map)
-function catPillsHTML() {
-  const counts = {};
-  PLACES.forEach(p => { if (S.src === "all" || p.source === S.src) counts[p.category] = (counts[p.category] || 0) + 1; });
-  return `<button class="pill ${!S.cat ? "on" : ""}" data-mapcat="all">All types</button>` +
-    CATEGORIES.filter(c => counts[c.key]).map(c =>
-      `<button class="pill ${S.cat === c.key ? "on" : ""}" data-mapcat="${c.key}"><span class="dot" style="background:${c.color}"></span>${c.label} <span class="x" style="opacity:.6">${counts[c.key]}</span></button>`).join("");
+// Unique cuisines relevant to the current source + category
+function cuisineOptions() {
+  const base = PLACES.filter(p => (S.src === "all" || p.source === S.src) && (!S.cat || p.category === S.cat));
+  const set = new Set();
+  base.forEach(p => p.cuisine.forEach(c => set.add(c)));
+  if (S.cuisine) set.add(S.cuisine);
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+// Compact filter bar (mobile only — desktop uses the sidebar)
+function filterBarHTML() {
+  const cats = CATEGORIES.map(c => `<option value="${c.key}" ${S.cat === c.key ? "selected" : ""}>${c.label}</option>`).join("");
+  const cuis = cuisineOptions().map(c => `<option value="${esc(c)}" ${S.cuisine === c ? "selected" : ""}>${esc(c)}</option>`).join("");
+  return `<div class="filterbar">
+    <label class="fb-search"><span class="fb-ic">🔍</span><input id="fb-q" type="search" placeholder="Search places…" value="${esc(S.query)}" autocomplete="off"></label>
+    <div class="fb-controls">
+      <select id="fb-cat" class="fb-select" aria-label="Category"><option value="">All types</option>${cats}</select>
+      <select id="fb-cuisine" class="fb-select" aria-label="Cuisine"><option value="">All cuisines</option>${cuis}</select>
+      <button id="fb-john" class="fb-toggle ${S.src === "john" ? "on" : ""}">🔔 John's</button>
+    </div>
+  </div>`;
+}
+
+function bindFilterBar(onSearch) {
+  const cat = el("fb-cat"); if (cat) cat.addEventListener("change", () => { S.cat = cat.value || null; update(); });
+  const cui = el("fb-cuisine"); if (cui) cui.addEventListener("change", () => { S.cuisine = cui.value || null; update(); });
+  const john = el("fb-john"); if (john) john.addEventListener("click", () => { S.src = S.src === "john" ? "all" : "john"; update(); });
+  const q = el("fb-q"); if (q) q.addEventListener("input", () => { S.query = q.value.trim(); onSearch(); });
+}
+
+function activeFilterText() {
+  const bits = [];
+  if (S.cat) bits.push(catLabel[S.cat]);
+  if (S.cuisine) bits.push(S.cuisine);
+  if (S.src === "john") bits.push("John's picks");
+  if (S.day !== "any") bits.push("open " + (S.day === "tue" ? "Tue" : "Wed"));
+  if (S.user) bits.push("near you");
+  return bits.length ? " · " + bits.join(" · ") : "";
+}
+
+function onQueryChange() {
+  if (S.screen === "browse") fillResults();
+  else if (S.screen === "map" && MAP) { addPlaceMarkers(); updateMapSub(); }
+  else renderScreen();
 }
 
 function screenBrowse() {
-  const list = filtered();
   return `
     <div class="screen-head"><div class="screen-title">All Places</div></div>
-    <div class="pills">
-      <button class="pill ${S.src === "all" ? "on" : ""}" data-pill="all-src">All picks</button>
-      <button class="pill ${S.src === "john" ? "on" : ""}" data-pill="john">🔔 John's picks</button>
-    </div>
-    <div class="pills cat-row">${catPillsHTML()}</div>
-    <div class="result-count">${list.length} place${list.length === 1 ? "" : "s"}${S.user ? " · sorted by distance" : ""}${S.day !== "any" ? " · open " + (S.day === "tue" ? "Tue Jun 30" : "Wed Jul 1") : ""}</div>
-    <div class="grid">${list.map(cardHTML).join("") || emptyHTML()}</div>`;
+    ${S.W < 1024 ? filterBarHTML() : ""}
+    <div id="results"></div>`;
 }
 
+function fillResults() {
+  const host = el("results"); if (!host) return;
+  const list = filtered();
+  host.innerHTML =
+    `<div class="result-count">${list.length} place${list.length === 1 ? "" : "s"}${activeFilterText()}${S.user ? " · sorted by distance" : ""}</div>
+     <div class="grid">${list.map(cardHTML).join("") || emptyHTML()}</div>`;
+  host.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.open)));
+}
+
+function mapSubText() {
+  const n = filtered().length;
+  return `Center City Philadelphia · ${n} place${n === 1 ? "" : "s"}${activeFilterText()}${S.user ? " · 📍 your location shown" : ""}`;
+}
+function updateMapSub() { const s = el("map-sub"); if (s) s.textContent = mapSubText(); }
+
 function screenMap() {
-  const shown = filtered().length;
   return `
-    <div class="screen-head"><div class="screen-title">Map View</div><div class="screen-sub">Center City Philadelphia · ${shown} place${shown === 1 ? "" : "s"}${S.user ? " · 📍 your location shown" : ""}</div></div>
-    <div class="pills map-cats">${catPillsHTML()}</div>
+    <div class="screen-head"><div class="screen-title">Map View</div><div class="screen-sub" id="map-sub">${mapSubText()}</div></div>
+    ${S.W < 1024 ? filterBarHTML() : ""}
     <div class="map-wrap"><div id="map"></div></div>`;
 }
 
@@ -198,21 +252,13 @@ let MAP = null, MARKERS = [], userMarker = null;
 function renderScreen() {
   const host = el("screen");
   if (S.screen === "home") host.innerHTML = screenHome();
-  else if (S.screen === "browse") host.innerHTML = screenBrowse();
-  else if (S.screen === "map") { host.innerHTML = screenMap(); buildMap(); }
+  else if (S.screen === "browse") { host.innerHTML = screenBrowse(); fillResults(); bindFilterBar(fillResults); }
+  else if (S.screen === "map") { host.innerHTML = screenMap(); buildMap(); bindFilterBar(() => { addPlaceMarkers(); updateMapSub(); }); }
   else if (S.screen === "plan") { host.innerHTML = screenPlan(); renderPlan(); }
 
-  // bindings
+  // bindings (home type chips + any place cards outside the results region)
   document.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.open)));
   document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { S.cat = S.cat === b.dataset.cat ? null : b.dataset.cat; S.screen = "browse"; update(); }));
-  document.querySelectorAll("[data-pill]").forEach(b => b.addEventListener("click", () => {
-    S.src = b.dataset.pill === "all-src" ? "all" : b.dataset.pill;
-    update();
-  }));
-  document.querySelectorAll("[data-mapcat]").forEach(b => b.addEventListener("click", () => {
-    S.cat = b.dataset.mapcat === "all" ? null : (S.cat === b.dataset.mapcat ? null : b.dataset.mapcat);
-    update();
-  }));
   const bc = document.querySelector("[data-banner-close]");
   if (bc) bc.addEventListener("click", () => { S._bannerClosed = true; renderScreen(); });
 }
@@ -223,21 +269,27 @@ function renderScreen() {
 function pin(color) {
   return L.divIcon({ className: "", html: `<div style="background:${color};width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`, iconSize: [22, 22], iconAnchor: [11, 22], popupAnchor: [0, -20] });
 }
-function buildMap() {
-  if (MAP) { MAP.remove(); MAP = null; MARKERS = []; userMarker = null; }
-  MAP = L.map("map", { scrollWheelZoom: true }).setView([39.951, -75.1605], 13);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20,
-  }).addTo(MAP);
-
+function addPlaceMarkers() {
+  if (!MAP) return;
+  MARKERS.forEach(m => MAP.removeLayer(m));
+  MARKERS = [];
   const list = filtered(), bounds = [];
   list.forEach(p => {
     const m = L.marker([p.lat, p.lng], { icon: pin(catColor[p.category]) }).addTo(MAP);
     m.bindPopup(`<div class="pop"><h4>${p.source === "john" ? "🔔 " : ""}${esc(p.name)}</h4><p>${catLabel[p.category]} · ${priceStr(p)}${S.user && p._d != null ? " · " + fmtDist(p._d) : ""}</p><button onclick="window.__open('${p.id}')">View details</button></div>`);
     MARKERS.push(m); bounds.push([p.lat, p.lng]);
   });
-  if (S.user) { userMarker = L.marker([S.user.lat, S.user.lng], { icon: L.divIcon({ className: "", html: '<div class="user-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000 }).addTo(MAP).bindPopup("<div class='pop'><h4>📍 You are here</h4></div>"); bounds.push([S.user.lat, S.user.lng]); }
+  if (S.user) bounds.push([S.user.lat, S.user.lng]);
   if (bounds.length) { try { MAP.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 }); } catch (e) {} }
+}
+function buildMap() {
+  if (MAP) { MAP.remove(); MAP = null; MARKERS = []; userMarker = null; }
+  MAP = L.map("map", { scrollWheelZoom: true }).setView([39.951, -75.1605], 13);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20,
+  }).addTo(MAP);
+  if (S.user) userMarker = L.marker([S.user.lat, S.user.lng], { icon: L.divIcon({ className: "", html: '<div class="user-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000 }).addTo(MAP).bindPopup("<div class='pop'><h4>📍 You are here</h4></div>");
+  addPlaceMarkers();
   setTimeout(() => MAP && MAP.invalidateSize(), 60);
   setTimeout(() => MAP && MAP.invalidateSize(), 320);
 }
@@ -438,6 +490,7 @@ function init() {
   el("hero-theme").addEventListener("click", () => { S.theme = S.theme === "A" ? "B" : "A"; applyTheme(); });
   el("sb-locate").addEventListener("click", locate);
   el("sb-addr").addEventListener("keydown", e => { if (e.key === "Enter") { const v = e.target.value.trim(); if (v) geocode(v); } });
+  el("sb-q").addEventListener("input", () => { S.query = el("sb-q").value.trim(); onQueryChange(); });
   el("detail-scrim").addEventListener("click", closeDetail);
   window.addEventListener("resize", () => { const w = window.innerWidth; if ((w < 1024) !== (S.W < 1024)) { S.W = w; update(); } S.W = w; });
 

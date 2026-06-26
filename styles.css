@@ -161,9 +161,22 @@ body {
 .pill:hover { border-color: var(--accent); }
 .pill.on { background: var(--accent); border-color: var(--accent); color: #1a1308; }
 .pill .x { font-size: 14px; opacity: .8; }
-.cat-row { flex-wrap: wrap; margin: 10px 0 0; }
-.cat-row .pill .dot { width: 9px; height: 9px; border-radius: 50%; }
 .result-count { font-size: 12px; color: var(--text-sub); margin: 12px 2px; font-weight: 500; }
+
+/* ---------- Compact filter bar (mobile content) ---------- */
+.filterbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.fb-search { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; }
+.fb-search .fb-ic { opacity: .55; font-size: 14px; }
+.fb-search input { flex: 1; border: none; background: none; outline: none; font: inherit; font-size: 14px; color: var(--text); }
+.fb-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.fb-select { flex: 1 1 130px; appearance: none; -webkit-appearance: none; background-color: var(--card); background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%237a7068' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; border: 1px solid var(--line); border-radius: 12px; padding: 11px 30px 11px 13px; font: inherit; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; }
+.fb-select option { color: #141210; }
+.fb-toggle { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 12px; padding: 11px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.fb-toggle.on { background: var(--accent); border-color: var(--accent); color: #1a1308; }
+
+/* ---------- Sidebar dropdowns ---------- */
+.sb-select { width: 100%; appearance: none; -webkit-appearance: none; background-color: rgba(255,255,255,.05); background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23bbb3a8' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>"); background-repeat: no-repeat; background-position: right 11px center; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; padding: 9px 28px 9px 11px; font: inherit; font-size: 13px; font-weight: 600; color: #ede5d8; cursor: pointer; }
+.sb-select option { color: #141210; }
 
 /* ---------- Card grid ---------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
@@ -250,9 +263,6 @@ body {
 .d-book { background: var(--accent); color: #1a1308; }
 
 /* ============ MAP SCREEN ============ */
-.map-cats { margin-bottom: 14px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
-.map-cats .pill { flex: none; }
-.map-cats .pill .dot { width: 9px; height: 9px; border-radius: 50%; }
 /* isolate Leaflet's internal z-indexes so the detail panel can sit above the map */
 .map-wrap { border-radius: 14px; overflow: hidden; box-shadow: var(--card-shadow); isolation: isolate; position: relative; z-index: 0; max-width: 100%; }
 #map { width: 100%; height: calc(100vh - 240px); min-height: 380px; }
@@ -346,11 +356,10 @@ body {
   .d-back { display: inline-flex; align-items: center; gap: 6px; position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 16px; background: rgba(0,0,0,.3); color: #fff; border: none; border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 2; }
   .detail-scrim { display: none; }
 
-  .map-cats { margin-bottom: 12px; }
   /* Map screen: fit the map between the hero and the fixed bottom nav — no page scroll, no overlap */
   #app[data-screen="map"] .main-wrap { height: calc(100dvh - 60px - env(safe-area-inset-bottom, 0px)); }
   #app[data-screen="map"] #screen { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 12px; overflow: hidden; }
-  #app[data-screen="map"] .map-cats { flex: none; }
+  #app[data-screen="map"] .filterbar { flex: none; }
   #app[data-screen="map"] .map-wrap { flex: 1 1 auto; min-height: 180px; }
   #app[data-screen="map"] #map { height: 100%; min-height: 180px; }
 
