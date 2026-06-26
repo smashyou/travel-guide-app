@@ -147,30 +147,33 @@ function screenHome() {
     <div class="type-row">${types}</div>`;
 }
 
+// Shared category pill selector (used by Browse + Map)
+function catPillsHTML() {
+  const counts = {};
+  PLACES.forEach(p => { if (S.src === "all" || p.source === S.src) counts[p.category] = (counts[p.category] || 0) + 1; });
+  return `<button class="pill ${!S.cat ? "on" : ""}" data-mapcat="all">All types</button>` +
+    CATEGORIES.filter(c => counts[c.key]).map(c =>
+      `<button class="pill ${S.cat === c.key ? "on" : ""}" data-mapcat="${c.key}"><span class="dot" style="background:${c.color}"></span>${c.label} <span class="x" style="opacity:.6">${counts[c.key]}</span></button>`).join("");
+}
+
 function screenBrowse() {
   const list = filtered();
-  const catPill = S.cat ? `<button class="pill on" data-cat="${S.cat}">${catEmoji[S.cat]} ${catLabel[S.cat]} <span class="x">×</span></button>` : "";
   return `
     <div class="screen-head"><div class="screen-title">All Places</div></div>
     <div class="pills">
-      <button class="pill ${S.src === "all" && !S.cat ? "on" : ""}" data-pill="all">All</button>
+      <button class="pill ${S.src === "all" ? "on" : ""}" data-pill="all-src">All picks</button>
       <button class="pill ${S.src === "john" ? "on" : ""}" data-pill="john">🔔 John's picks</button>
-      ${catPill}
     </div>
+    <div class="pills cat-row">${catPillsHTML()}</div>
     <div class="result-count">${list.length} place${list.length === 1 ? "" : "s"}${S.user ? " · sorted by distance" : ""}${S.day !== "any" ? " · open " + (S.day === "tue" ? "Tue Jun 30" : "Wed Jul 1") : ""}</div>
     <div class="grid">${list.map(cardHTML).join("") || emptyHTML()}</div>`;
 }
 
 function screenMap() {
-  const counts = {};
-  PLACES.forEach(p => { if (S.src === "all" || p.source === S.src) counts[p.category] = (counts[p.category] || 0) + 1; });
-  const pills = `<button class="pill ${!S.cat ? "on" : ""}" data-mapcat="all">All</button>` +
-    CATEGORIES.filter(c => counts[c.key]).map(c =>
-      `<button class="pill ${S.cat === c.key ? "on" : ""}" data-mapcat="${c.key}"><span class="dot" style="background:${c.color}"></span>${c.label}</button>`).join("");
   const shown = filtered().length;
   return `
     <div class="screen-head"><div class="screen-title">Map View</div><div class="screen-sub">Center City Philadelphia · ${shown} place${shown === 1 ? "" : "s"}${S.user ? " · 📍 your location shown" : ""}</div></div>
-    <div class="pills map-cats">${pills}</div>
+    <div class="pills map-cats">${catPillsHTML()}</div>
     <div class="map-wrap"><div id="map"></div></div>`;
 }
 
@@ -202,7 +205,7 @@ function renderScreen() {
   document.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.open)));
   document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { S.cat = S.cat === b.dataset.cat ? null : b.dataset.cat; S.screen = "browse"; update(); }));
   document.querySelectorAll("[data-pill]").forEach(b => b.addEventListener("click", () => {
-    if (b.dataset.pill === "all") { S.src = "all"; S.cat = null; } else { S.src = b.dataset.pill; }
+    S.src = b.dataset.pill === "all-src" ? "all" : b.dataset.pill;
     update();
   }));
   document.querySelectorAll("[data-mapcat]").forEach(b => b.addEventListener("click", () => {

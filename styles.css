@@ -161,6 +161,8 @@ body {
 .pill:hover { border-color: var(--accent); }
 .pill.on { background: var(--accent); border-color: var(--accent); color: #1a1308; }
 .pill .x { font-size: 14px; opacity: .8; }
+.cat-row { flex-wrap: wrap; margin: 10px 0 0; }
+.cat-row .pill .dot { width: 9px; height: 9px; border-radius: 50%; }
 .result-count { font-size: 12px; color: var(--text-sub); margin: 12px 2px; font-weight: 500; }
 
 /* ---------- Card grid ---------- */
