@@ -251,7 +251,7 @@ body {
 .map-cats .pill .dot { width: 9px; height: 9px; border-radius: 50%; }
 /* isolate Leaflet's internal z-indexes so the detail panel can sit above the map */
 .map-wrap { border-radius: 14px; overflow: hidden; box-shadow: var(--card-shadow); isolation: isolate; position: relative; z-index: 0; max-width: 100%; }
-#map { width: 100%; height: calc(100vh - 280px); min-height: 360px; }
+#map { width: 100%; height: calc(100vh - 240px); min-height: 380px; }
 .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
 .legend .lg { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-sub); }
 .legend .lg .dot { width: 11px; height: 11px; border-radius: 50%; }
@@ -337,15 +337,21 @@ body {
 
   /* Detail = full-screen takeover */
   .detail { width: 100vw; border-left: none; }
+  .d-band { padding-top: calc(62px + env(safe-area-inset-top, 0px)); }
   .d-close { display: none; }
-  .d-back { display: inline-flex; align-items: center; gap: 6px; position: absolute; top: 16px; left: 16px; background: rgba(0,0,0,.25); color: #fff; border: none; border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .d-back { display: inline-flex; align-items: center; gap: 6px; position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 16px; background: rgba(0,0,0,.3); color: #fff; border: none; border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 2; }
   .detail-scrim { display: none; }
 
-  #map { height: 54vh; min-height: 300px; }
   .map-cats { margin-bottom: 12px; }
+  /* Map screen: fit the map between the hero and the fixed bottom nav — no page scroll, no overlap */
+  #app[data-screen="map"] .main-wrap { height: calc(100dvh - 60px - env(safe-area-inset-bottom, 0px)); }
+  #app[data-screen="map"] #screen { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 12px; overflow: hidden; }
+  #app[data-screen="map"] .map-cats { flex: none; }
+  #app[data-screen="map"] .map-wrap { flex: 1 1 auto; min-height: 180px; }
+  #app[data-screen="map"] #map { height: 100%; min-height: 180px; }
 
   .bottom-nav {
-    display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 60;
+    display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 900;
     background:
       radial-gradient(rgba(255,210,140,.05) 1px, transparent 1px) 0 0 / 3px 3px,
       linear-gradient(0deg, #151008, #1a1308);

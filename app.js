@@ -167,13 +167,11 @@ function screenMap() {
   const pills = `<button class="pill ${!S.cat ? "on" : ""}" data-mapcat="all">All</button>` +
     CATEGORIES.filter(c => counts[c.key]).map(c =>
       `<button class="pill ${S.cat === c.key ? "on" : ""}" data-mapcat="${c.key}"><span class="dot" style="background:${c.color}"></span>${c.label}</button>`).join("");
-  const legend = CATEGORIES.map(c => `<span class="lg"><span class="dot" style="background:${c.color}"></span>${c.label}</span>`).join("");
   const shown = filtered().length;
   return `
     <div class="screen-head"><div class="screen-title">Map View</div><div class="screen-sub">Center City Philadelphia · ${shown} place${shown === 1 ? "" : "s"}${S.user ? " · 📍 your location shown" : ""}</div></div>
     <div class="pills map-cats">${pills}</div>
-    <div class="map-wrap"><div id="map"></div></div>
-    <div class="legend">${legend}</div>`;
+    <div class="map-wrap"><div id="map"></div></div>`;
 }
 
 function screenPlan() {
@@ -424,7 +422,7 @@ function applyTheme() {
 }
 function go(screen) { S.screen = screen; closeDetail(); update(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 
-function update() { renderNav(); renderFilters(); renderScreen(); }
+function update() { el("app").dataset.screen = S.screen; renderNav(); renderFilters(); renderScreen(); }
 
 /* ---------- init ---------- */
 function init() {
