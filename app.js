@@ -124,6 +124,7 @@ function cardHTML(p) {
     <div class="c-cat">${catLabel[p.category]}</div>
     <div class="c-name">${esc(p.name)}</div>
     <div class="c-blurb">${esc(p.blurb)}</div>
+    <div class="c-tags">${p.cuisine.slice(0, 3).map(t => `<span class="c-tag">${esc(t)}</span>`).join("")}</div>
     <div class="c-foot"><span class="c-price">${priceStr(p)}</span><span class="c-res">${RES_LABEL[p.reservation]}</span>${dist}</div>
   </button>`;
 }
