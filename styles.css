@@ -20,6 +20,7 @@
   --open: #1a7a4a;
   --closed: #b82020;
   --chip-bg: #faf7f0;
+  --scroll-thumb: rgba(20,18,16,.26);
 }
 #app[data-theme="B"] {
   --bg: #0e0b08;
@@ -35,6 +36,7 @@
   --open: #3a9a5a;
   --closed: #c83030;
   --chip-bg: #1c1915;
+  --scroll-thumb: rgba(237,229,216,.20);
 }
 
 html, body { height: 100%; }
@@ -44,6 +46,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 .serif { font-family: 'Playfair Display', Georgia, serif; }
+
+/* ---------- Themed scrollbars ---------- */
+* { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb, rgba(120,100,60,.32)) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--scroll-thumb, rgba(120,100,60,.32)); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+/* Sidebar is always dark → light thumb */
+.sidebar, .sb-scroll { scrollbar-color: rgba(255,255,255,.18) transparent; }
+.sb-scroll::-webkit-scrollbar { width: 8px; }
+.sb-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+.sb-scroll::-webkit-scrollbar-thumb:hover { background: rgba(196,148,50,.6); }
 
 #app {
   min-height: 100vh;
@@ -190,10 +204,10 @@ body {
   background: var(--bg); border-left: 1px solid var(--line);
   box-shadow: -8px 0 40px rgba(0,0,0,.18);
   transform: translateX(100%); transition: transform .3s ease;
-  z-index: 80; overflow-y: auto;
+  z-index: 1200; overflow-y: auto;
 }
 .detail.open { transform: translateX(0); }
-.detail-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.3); opacity: 0; pointer-events: none; transition: opacity .3s ease; z-index: 70; }
+.detail-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.3); opacity: 0; pointer-events: none; transition: opacity .3s ease; z-index: 1100; }
 .detail-scrim.show { opacity: 1; pointer-events: auto; }
 
 .d-band { padding: 22px 22px 18px; color: #fff; position: relative; }
@@ -232,8 +246,12 @@ body {
 .d-book { background: var(--accent); color: #1a1308; }
 
 /* ============ MAP SCREEN ============ */
-.map-wrap { border-radius: 14px; overflow: hidden; box-shadow: var(--card-shadow); }
-#map { width: 100%; height: calc(100vh - 230px); min-height: 380px; }
+.map-cats { margin-bottom: 14px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
+.map-cats .pill { flex: none; }
+.map-cats .pill .dot { width: 9px; height: 9px; border-radius: 50%; }
+/* isolate Leaflet's internal z-indexes so the detail panel can sit above the map */
+.map-wrap { border-radius: 14px; overflow: hidden; box-shadow: var(--card-shadow); isolation: isolate; position: relative; z-index: 0; max-width: 100%; }
+#map { width: 100%; height: calc(100vh - 280px); min-height: 360px; }
 .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
 .legend .lg { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-sub); }
 .legend .lg .dot { width: 11px; height: 11px; border-radius: 50%; }
@@ -323,7 +341,8 @@ body {
   .d-back { display: inline-flex; align-items: center; gap: 6px; position: absolute; top: 16px; left: 16px; background: rgba(0,0,0,.25); color: #fff; border: none; border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
   .detail-scrim { display: none; }
 
-  #map { height: calc(100vh - 270px); }
+  #map { height: 54vh; min-height: 300px; }
+  .map-cats { margin-bottom: 12px; }
 
   .bottom-nav {
     display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 60;

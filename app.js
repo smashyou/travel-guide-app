@@ -162,9 +162,16 @@ function screenBrowse() {
 }
 
 function screenMap() {
+  const counts = {};
+  PLACES.forEach(p => { if (S.src === "all" || p.source === S.src) counts[p.category] = (counts[p.category] || 0) + 1; });
+  const pills = `<button class="pill ${!S.cat ? "on" : ""}" data-mapcat="all">All</button>` +
+    CATEGORIES.filter(c => counts[c.key]).map(c =>
+      `<button class="pill ${S.cat === c.key ? "on" : ""}" data-mapcat="${c.key}"><span class="dot" style="background:${c.color}"></span>${c.label}</button>`).join("");
   const legend = CATEGORIES.map(c => `<span class="lg"><span class="dot" style="background:${c.color}"></span>${c.label}</span>`).join("");
+  const shown = filtered().length;
   return `
-    <div class="screen-head"><div class="screen-title">Map View</div><div class="screen-sub">Center City Philadelphia${S.user ? " · 📍 your location shown" : ""}</div></div>
+    <div class="screen-head"><div class="screen-title">Map View</div><div class="screen-sub">Center City Philadelphia · ${shown} place${shown === 1 ? "" : "s"}${S.user ? " · 📍 your location shown" : ""}</div></div>
+    <div class="pills map-cats">${pills}</div>
     <div class="map-wrap"><div id="map"></div></div>
     <div class="legend">${legend}</div>`;
 }
@@ -200,6 +207,10 @@ function renderScreen() {
     if (b.dataset.pill === "all") { S.src = "all"; S.cat = null; } else { S.src = b.dataset.pill; }
     update();
   }));
+  document.querySelectorAll("[data-mapcat]").forEach(b => b.addEventListener("click", () => {
+    S.cat = b.dataset.mapcat === "all" ? null : (S.cat === b.dataset.mapcat ? null : b.dataset.mapcat);
+    update();
+  }));
   const bc = document.querySelector("[data-banner-close]");
   if (bc) bc.addEventListener("click", () => { S._bannerClosed = true; renderScreen(); });
 }
@@ -226,6 +237,7 @@ function buildMap() {
   if (S.user) { userMarker = L.marker([S.user.lat, S.user.lng], { icon: L.divIcon({ className: "", html: '<div class="user-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000 }).addTo(MAP).bindPopup("<div class='pop'><h4>📍 You are here</h4></div>"); bounds.push([S.user.lat, S.user.lng]); }
   if (bounds.length) { try { MAP.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 }); } catch (e) {} }
   setTimeout(() => MAP && MAP.invalidateSize(), 60);
+  setTimeout(() => MAP && MAP.invalidateSize(), 320);
 }
 window.__open = id => openDetail(id);
 
@@ -405,6 +417,7 @@ async function geocode(q) {
    =========================================================== */
 function applyTheme() {
   el("app").dataset.theme = S.theme;
+  document.documentElement.style.scrollbarColor = (S.theme === "A" ? "rgba(20,18,16,.26)" : "rgba(237,229,216,.20)") + " transparent";
   document.querySelector('meta[name="theme-color"]').setAttribute("content", S.theme === "A" ? "#151008" : "#0e0b08");
   document.querySelectorAll("[data-theme-btn]").forEach(b => b.classList.toggle("on", b.dataset.themeBtn === S.theme));
   try { localStorage.setItem("lore-theme", S.theme); } catch (e) {}
