@@ -15,13 +15,13 @@ const BANNER = {
 
 // Category metadata: key, label, emoji, marker color
 const CATEGORIES = [
-  { key: "cheesesteaks", label: "Cheesesteaks", emoji: "🥩", color: "#c0392b" },
-  { key: "finedining",   label: "Fine Dining",  emoji: "🍽️", color: "#8e44ad" },
-  { key: "casual",       label: "Casual & Brunch", emoji: "🥞", color: "#e67e22" },
-  { key: "cheap",        label: "Cheap Eats",   emoji: "💸", color: "#16a085" },
-  { key: "sweets",       label: "Coffee & Sweets", emoji: "☕", color: "#d35400" },
-  { key: "bars",         label: "Bars & Views", emoji: "🍸", color: "#2980b9" },
-  { key: "landmarks",    label: "Landmarks",    emoji: "🏛️", color: "#2c3e50" },
+  { key: "cheesesteaks", label: "Cheesesteaks", emoji: "🥩", color: "#b8291c" },
+  { key: "finedining",   label: "Fine Dining",  emoji: "🍽️", color: "#5c3d9e" },
+  { key: "casual",       label: "Casual & Brunch", emoji: "🥞", color: "#c27015" },
+  { key: "cheap",        label: "Cheap Eats",   emoji: "💸", color: "#2f6f7a" },
+  { key: "sweets",       label: "Coffee & Sweets", emoji: "☕", color: "#7a4010" },
+  { key: "bars",         label: "Bars & Views", emoji: "🍸", color: "#1a5e9e" },
+  { key: "landmarks",    label: "Landmarks",    emoji: "🏛️", color: "#2e4a5e" },
 ];
 
 const PLACES = [

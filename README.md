@@ -1,9 +1,13 @@
-# 🔔 Philly Guide — a 2-day Center City visit
+# Lore — Philadelphia · *Know the lore.*
 
 A lightweight, mobile-friendly travel guide built for a friend visiting Philadelphia
 **June 30 – July 1, 2026**. Curated favorites + also-recommended local picks, with maps,
 addresses, phones, multi-platform reviews, average costs, day-by-day open hours, reservation
 flags, geolocation ("places near me"), and configurable getting-around modes.
+
+Styled with the **Lore** brand & design system (Atlas+Route logo, Playfair Display + DM Sans,
+Warm/Dark themes, desktop sidebar + detail panel, mobile hero + bottom-tab nav, 5 screens:
+Home · Browse · Detail · Map · Plan).
 
 No build step, no framework — just static `HTML + CSS + JS` with [Leaflet](https://leafletjs.com/)
 maps over free OpenStreetMap/CARTO tiles. Deploys to Vercel in seconds.

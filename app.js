@@ -1,532 +1,431 @@
 /* ===========================================================
-   Philly Guide — app logic
-   Pure vanilla JS + Leaflet. No build step.
+   Lore — app logic (vanilla JS, Leaflet, no build step)
+   Real data from data.js · screen router · 2 themes
    =========================================================== */
 
-const state = {
-  source: "all",
-  category: "all",
-  day: "any",        // any | tue | wed
-  openOnly: false,
-  query: "",
-  transport: "walk",
-  user: null,        // { lat, lng }
+const LOGO_SVG = `<svg viewBox="0 0 24 26" fill="none">
+  <path d="M2 5 L12 7 L22 5 L22 21 L12 23 L2 21 Z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+  <line x1="12" y1="7" x2="12" y2="23" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  <line x1="17" y1="7" x2="18" y2="21" stroke="currentColor" stroke-width=".7" opacity=".35"/>
+  <path d="M5 19 C5 15 9 15 8 12 C7 9 5 9 6 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="5" cy="19" r="1.3" fill="currentColor"/>
+  <circle cx="6" cy="7" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/>
+  <circle cx="6" cy="7" r=".6" fill="currentColor"/>
+</svg>`;
+
+const ICONS = {
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/></svg>',
+  browse: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5 11 11l-2.5 4.5L13 13z"/></svg>',
+  map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c4-4.5 7-8 7-11a7 7 0 1 0-14 0c0 3 3 6.5 7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>',
+  plan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 9h16M8 3v4M16 3v4M8 14h4"/></svg>',
 };
 
+const NAV = [
+  { key: "home", label: "Home", icon: "home" },
+  { key: "browse", label: "Browse", icon: "browse", count: true },
+  { key: "map", label: "Map", icon: "map" },
+  { key: "plan", label: "2-Day Plan", icon: "plan" },
+];
+
+const S = {
+  theme: "A",
+  screen: "home",
+  cat: null,
+  day: "any",
+  src: "all",
+  selected: null,
+  transport: "walk",
+  user: null,
+  W: window.innerWidth,
+  plan: { interests: CATEGORIES.map(c => c.key), pace: "balanced", maxPrice: 4, walkInOnly: false },
+};
+
+const el = id => document.getElementById(id);
 const catColor = Object.fromEntries(CATEGORIES.map(c => [c.key, c.color]));
 const catLabel = Object.fromEntries(CATEGORIES.map(c => [c.key, c.label]));
 const catEmoji = Object.fromEntries(CATEGORIES.map(c => [c.key, c.emoji]));
+const RES_LABEL = { walkin: "Walk-in", recommended: "Reserve ahead", required: "Reservation req.", ticket: "Timed ticket" };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-let map, markers = {}, userMarker = null;
-const el = id => document.getElementById(id);
-
-/* ---------- Distance (haversine, miles) ---------- */
+/* ---------- geo helpers ---------- */
 function distMiles(a, b) {
   const R = 3958.8, toRad = d => d * Math.PI / 180;
   const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
-  const s = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
 }
-function fmtDist(mi) {
-  if (mi < 0.19) return Math.round(mi * 5280) + " ft";
-  return mi.toFixed(mi < 10 ? 1 : 0) + " mi";
-}
+function fmtDist(mi) { return mi < 0.19 ? Math.round(mi * 5280) + " ft" : mi.toFixed(mi < 10 ? 1 : 0) + " mi"; }
+function priceStr(p) { return p.priceLevel === 0 ? "Free" : "$".repeat(p.priceLevel); }
 
-/* ---------- Day status helper ---------- */
-function dayInfo(p) {
-  if (state.day === "tue") return p.tripStatus.tue;
-  if (state.day === "wed") return p.tripStatus.wed;
-  // "any": open if open either day
-  return { open: p.tripStatus.tue.open || p.tripStatus.wed.open, text: "" };
+function dirUrl(p) {
+  const mode = TRANSPORT[S.transport].gmaps;
+  let url = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(p.address || (p.lat + "," + p.lng)) + "&travelmode=" + mode;
+  if (S.user) url += "&origin=" + S.user.lat + "," + S.user.lng;
+  return url;
 }
+const mapsUrl = p => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(p.address || p.name);
 
-/* ---------- Filtering ---------- */
+/* ---------- filtering ---------- */
 function filtered() {
   let list = PLACES.slice();
-  if (state.source !== "all") list = list.filter(p => p.source === state.source);
-  if (state.category !== "all") list = list.filter(p => p.category === state.category);
-  if (state.openOnly && state.day !== "any") list = list.filter(p => dayInfo(p).open);
-  if (state.query) {
-    const q = state.query.toLowerCase();
-    list = list.filter(p =>
-      (p.name + " " + p.cuisine.join(" ") + " " + p.blurb + " " + catLabel[p.category])
-        .toLowerCase().includes(q));
-  }
-  if (state.user) {
-    list.forEach(p => p._d = distMiles(state.user, p));
-    list.sort((a, b) => a._d - b._d);
-  } else {
-    // John's picks first, then by category order
+  if (S.src !== "all") list = list.filter(p => p.source === S.src);
+  if (S.cat) list = list.filter(p => p.category === S.cat);
+  if (S.day !== "any") list = list.filter(p => p.tripStatus[S.day].open);
+  if (S.user) { list.forEach(p => p._d = distMiles(S.user, p)); list.sort((a, b) => a._d - b._d); }
+  else {
     const order = CATEGORIES.map(c => c.key);
-    list.sort((a, b) => {
-      if (a.source !== b.source) return a.source === "john" ? -1 : 1;
-      return order.indexOf(a.category) - order.indexOf(b.category);
-    });
+    list.sort((a, b) => a.source !== b.source ? (a.source === "john" ? -1 : 1) : order.indexOf(a.category) - order.indexOf(b.category));
   }
   return list;
 }
 
-/* ---------- Google Maps directions URL ---------- */
-function dirUrl(p) {
-  const mode = TRANSPORT[state.transport].gmaps;
-  const dest = encodeURIComponent(p.address || (p.lat + "," + p.lng));
-  let url = "https://www.google.com/maps/dir/?api=1&destination=" + dest + "&travelmode=" + mode;
-  if (state.user) url += "&origin=" + state.user.lat + "," + state.user.lng;
-  return url;
-}
-function mapsUrl(p) {
-  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(p.address || p.name);
-}
+/* ===========================================================
+   RENDER: shell
+   =========================================================== */
+function injectLogos() { document.querySelectorAll("[data-logo]").forEach(n => n.innerHTML = LOGO_SVG); }
 
-/* ---------- Card rendering ---------- */
-const resLabel = { walkin: "✅ Walk-in", recommended: "📅 Reserve ahead", required: "🔒 Reservation req.", ticket: "🎟️ Timed ticket" };
-
-function priceStr(p) {
-  if (p.priceLevel === 0) return "Free";
-  return "$".repeat(p.priceLevel);
+function renderNav() {
+  const total = PLACES.length;
+  const item = (n, cls, withIcon) =>
+    `<button class="${cls} ${S.screen === n.key ? "on" : ""}" data-nav="${n.key}">${ICONS[n.icon]}<span>${n.label}</span>${n.count ? `<span class="nav-badge">${total}</span>` : ""}</button>`;
+  el("sb-nav").innerHTML = NAV.map(n => item(n, "nav-item", true)).join("");
+  el("bottom-nav").innerHTML = NAV.map(n =>
+    `<button class="bn-item ${S.screen === n.key ? "on" : ""}" data-nav="${n.key}">${ICONS[n.icon]}<span>${n.key === "plan" ? "Plan" : n.label}</span></button>`).join("");
+  document.querySelectorAll("[data-nav]").forEach(b => b.addEventListener("click", () => go(b.dataset.nav)));
 }
 
+function seg(items, cur, attr) {
+  return items.map(([v, l]) => `<button class="${String(cur) === String(v) ? "on" : ""}" data-${attr}="${v}">${l}</button>`).join("");
+}
+
+function renderFilters() {
+  const dayItems = [["any", "Any"], ["tue", "Tue"], ["wed", "Wed"]];
+  el("sb-day").innerHTML = seg(dayItems, S.day, "day");
+  el("hero-day").innerHTML = seg([["any", "Either day"], ["tue", "Tue Jun 30"], ["wed", "Wed Jul 1"]], S.day, "day");
+  el("sb-src").innerHTML = seg([["all", "All"], ["john", "🔔 John"]], S.src, "src");
+
+  const counts = {};
+  PLACES.forEach(p => { if (S.src === "all" || p.source === S.src) counts[p.category] = (counts[p.category] || 0) + 1; });
+  el("sb-cats").innerHTML = CATEGORIES.filter(c => counts[c.key]).map(c =>
+    `<button class="sb-cat ${S.cat === c.key ? "on" : ""}" data-cat="${c.key}"><span class="dot" style="background:${c.color}"></span>${c.label}<span class="c-count">${counts[c.key]}</span></button>`).join("");
+
+  document.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { S.day = b.dataset.day; update(); }));
+  document.querySelectorAll("[data-src]").forEach(b => b.addEventListener("click", () => { S.src = b.dataset.src; update(); }));
+  document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { S.cat = S.cat === b.dataset.cat ? null : b.dataset.cat; S.screen = "browse"; update(); }));
+}
+
+/* ===========================================================
+   RENDER: cards
+   =========================================================== */
+function cardHTML(p) {
+  const dist = S.user && p._d != null ? `<span class="c-dist">${fmtDist(p._d)}</span>` : "";
+  return `<button class="card" data-open="${p.id}" style="--cat:${catColor[p.category]}">
+    ${p.source === "john" ? '<span class="c-john">🔔</span>' : ""}
+    <div class="c-cat">${catLabel[p.category]}</div>
+    <div class="c-name">${esc(p.name)}</div>
+    <div class="c-blurb">${esc(p.blurb)}</div>
+    <div class="c-foot"><span class="c-price">${priceStr(p)}</span><span class="c-res">${RES_LABEL[p.reservation]}</span>${dist}</div>
+  </button>`;
+}
+
+/* ===========================================================
+   SCREENS
+   =========================================================== */
+function screenHome() {
+  const johns = filtered().filter(p => p.source === "john");
+  const total = PLACES.length;
+  const counts = {};
+  PLACES.forEach(p => counts[p.category] = (counts[p.category] || 0) + 1);
+  const types = CATEGORIES.filter(c => counts[c.key]).map(c =>
+    `<button class="type-chip" data-cat="${c.key}" style="--cat:${c.color}">${c.emoji} ${c.label} <span class="t-count">${counts[c.key]}</span></button>`).join("");
+
+  return `
+    ${bannerHTML()}
+    <div class="section-head"><h2>John's Picks</h2><button class="section-link" data-nav="browse">See all ${total} places →</button></div>
+    <div class="grid">${johns.map(cardHTML).join("") || emptyHTML()}</div>
+    <div class="section-head"><h2>Explore by type</h2></div>
+    <div class="type-row">${types}</div>`;
+}
+
+function screenBrowse() {
+  const list = filtered();
+  const catPill = S.cat ? `<button class="pill on" data-cat="${S.cat}">${catEmoji[S.cat]} ${catLabel[S.cat]} <span class="x">×</span></button>` : "";
+  return `
+    <div class="screen-head"><div class="screen-title">All Places</div></div>
+    <div class="pills">
+      <button class="pill ${S.src === "all" && !S.cat ? "on" : ""}" data-pill="all">All</button>
+      <button class="pill ${S.src === "john" ? "on" : ""}" data-pill="john">🔔 John's picks</button>
+      ${catPill}
+    </div>
+    <div class="result-count">${list.length} place${list.length === 1 ? "" : "s"}${S.user ? " · sorted by distance" : ""}${S.day !== "any" ? " · open " + (S.day === "tue" ? "Tue Jun 30" : "Wed Jul 1") : ""}</div>
+    <div class="grid">${list.map(cardHTML).join("") || emptyHTML()}</div>`;
+}
+
+function screenMap() {
+  const legend = CATEGORIES.map(c => `<span class="lg"><span class="dot" style="background:${c.color}"></span>${c.label}</span>`).join("");
+  return `
+    <div class="screen-head"><div class="screen-title">Map View</div><div class="screen-sub">Center City Philadelphia${S.user ? " · 📍 your location shown" : ""}</div></div>
+    <div class="map-wrap"><div id="map"></div></div>
+    <div class="legend">${legend}</div>`;
+}
+
+function screenPlan() {
+  return `
+    <div class="screen-head"><div class="screen-title">Build your 2-day plan</div><div class="screen-sub">Generated from your preferences — only places open each day, routed to minimize back-tracking.</div></div>
+    <div id="plan-config"></div>
+    <div class="plan-grid" id="plan-grid"></div>
+    <div class="getting" id="getting"></div>`;
+}
+
+function bannerHTML() {
+  if (typeof BANNER === "undefined" || S._bannerClosed) return "";
+  return `<div class="alert"><span class="a-ic">🎆</span><div><strong>${esc(BANNER.title)}</strong><p>${esc(BANNER.body)}</p></div><button class="a-close" data-banner-close>×</button></div>`;
+}
+const emptyHTML = () => `<div class="empty">No places match these filters.</div>`;
+
+/* ---------- screen dispatch ---------- */
+let MAP = null, MARKERS = [], userMarker = null;
+
+function renderScreen() {
+  const host = el("screen");
+  if (S.screen === "home") host.innerHTML = screenHome();
+  else if (S.screen === "browse") host.innerHTML = screenBrowse();
+  else if (S.screen === "map") { host.innerHTML = screenMap(); buildMap(); }
+  else if (S.screen === "plan") { host.innerHTML = screenPlan(); renderPlan(); }
+
+  // bindings
+  document.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.open)));
+  document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { S.cat = S.cat === b.dataset.cat ? null : b.dataset.cat; S.screen = "browse"; update(); }));
+  document.querySelectorAll("[data-pill]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.pill === "all") { S.src = "all"; S.cat = null; } else { S.src = b.dataset.pill; }
+    update();
+  }));
+  const bc = document.querySelector("[data-banner-close]");
+  if (bc) bc.addEventListener("click", () => { S._bannerClosed = true; renderScreen(); });
+}
+
+/* ===========================================================
+   MAP (real Leaflet)
+   =========================================================== */
+function pin(color) {
+  return L.divIcon({ className: "", html: `<div style="background:${color};width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`, iconSize: [22, 22], iconAnchor: [11, 22], popupAnchor: [0, -20] });
+}
+function buildMap() {
+  if (MAP) { MAP.remove(); MAP = null; MARKERS = []; userMarker = null; }
+  MAP = L.map("map", { scrollWheelZoom: true }).setView([39.951, -75.1605], 13);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 20,
+  }).addTo(MAP);
+
+  const list = filtered(), bounds = [];
+  list.forEach(p => {
+    const m = L.marker([p.lat, p.lng], { icon: pin(catColor[p.category]) }).addTo(MAP);
+    m.bindPopup(`<div class="pop"><h4>${p.source === "john" ? "🔔 " : ""}${esc(p.name)}</h4><p>${catLabel[p.category]} · ${priceStr(p)}${S.user && p._d != null ? " · " + fmtDist(p._d) : ""}</p><button onclick="window.__open('${p.id}')">View details</button></div>`);
+    MARKERS.push(m); bounds.push([p.lat, p.lng]);
+  });
+  if (S.user) { userMarker = L.marker([S.user.lat, S.user.lng], { icon: L.divIcon({ className: "", html: '<div class="user-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000 }).addTo(MAP).bindPopup("<div class='pop'><h4>📍 You are here</h4></div>"); bounds.push([S.user.lat, S.user.lng]); }
+  if (bounds.length) { try { MAP.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 }); } catch (e) {} }
+  setTimeout(() => MAP && MAP.invalidateSize(), 60);
+}
+window.__open = id => openDetail(id);
+
+/* ===========================================================
+   DETAIL panel / takeover
+   =========================================================== */
 function bookHTML(p) {
   const b = (typeof BOOKING !== "undefined") && BOOKING[p.id];
   if (!b) return "";
-  const label = b.platform === "Tickets" ? "🎟️ Book tickets" : "📅 Reserve · " + b.platform;
-  return `<a class="act act-book" href="${b.url}" target="_blank" rel="noopener">${label}</a>`;
+  return `<a class="d-book" href="${b.url}" target="_blank" rel="noopener">${b.platform === "Tickets" ? "🎟️ Book tickets" : "📅 Reserve · " + b.platform}</a>`;
 }
-
-function cardHTML(p) {
-  const di = dayInfo(p);
-  const showDay = state.day !== "any";
-  const dayBadge = showDay
-    ? `<div class="day-status ${di.open ? "open" : "closed"}">${di.open ? "● Open " + (state.day === "tue" ? "Tue" : "Wed") + " · " + di.text : "✕ " + di.text}</div>`
-    : "";
-  const srcBadge = p.source === "john"
-    ? `<span class="badge john">🔔 John's pick</span>`
-    : `<span class="badge alt">✨ Also recommended</span>`;
-  const dist = (state.user && p._d != null) ? `<span class="dist">${fmtDist(p._d)}</span>` : "";
-
-  const reviews = p.reviews.map(r =>
-    `<div class="review"><span class="plat">${r.platform}</span><span class="rate">${r.rating}</span> — ${r.quote}</div>`
-  ).join("");
-
-  return `
-  <article class="card" id="card-${p.id}" style="--cat:${catColor[p.category]}">
-    <div class="card-top">
-      <div>
-        <h3>${p.name}</h3>
-        <div class="cuisine">${catEmoji[p.category]} ${catLabel[p.category]} · ${p.cuisine.join(" · ")}</div>
-      </div>
-      ${dist}
-    </div>
-
-    <div class="badges">
-      ${srcBadge}
-      <span class="badge price">${priceStr(p)} · ${p.priceText}</span>
-      <span class="badge res-${p.reservation}">${resLabel[p.reservation]}</span>
-    </div>
-
-    ${dayBadge}
-    <p class="blurb">${p.blurb}</p>
-    ${p.flag ? `<div class="flag">${p.flag}</div>` : ""}
-
-    <div class="meta">
-      <span><span class="ic">📍</span><a href="${mapsUrl(p)}" target="_blank" rel="noopener">${p.address}</a></span>
-      ${p.phone ? `<span><span class="ic">📞</span><a href="tel:${p.phone.replace(/[^0-9+]/g, "")}">${p.phone}</a></span>` : ""}
-      <span><span class="ic">🕒</span>${p.hours}</span>
-      <span><span class="ic">🎟️</span>${p.resNote}</span>
-    </div>
-
-    <div class="why">“${p.why}”</div>
-    <div class="reviews">${reviews}</div>
-
-    <div class="card-actions">
-      ${bookHTML(p)}
-      <a class="act act-dir" href="${dirUrl(p)}" target="_blank" rel="noopener">${TRANSPORT[state.transport].emoji} Directions</a>
-      <button class="act act-map" data-focus="${p.id}">🗺️ Show on map</button>
-      ${p.website ? `<a class="act act-site" href="${p.website}" target="_blank" rel="noopener">🌐 Website</a>` : ""}
-    </div>
-  </article>`;
-}
-
-function renderCards() {
-  const list = filtered();
-  el("result-count").textContent =
-    `${list.length} place${list.length === 1 ? "" : "s"}` +
-    (state.user ? " · sorted by distance from you" : "");
-  el("cards").innerHTML = list.length
-    ? list.map(cardHTML).join("")
-    : `<div class="empty">No places match these filters. Try “All” or clearing the search.</div>`;
-
-  document.querySelectorAll("[data-focus]").forEach(btn =>
-    btn.addEventListener("click", () => focusPlace(btn.dataset.focus)));
-
-  renderMarkers(list);
-}
-
-/* ---------- Map ---------- */
-function initMap() {
-  map = L.map("map", { scrollWheelZoom: true }).setView([39.9510, -75.1605], 13);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
-    maxZoom: 20,
-  }).addTo(map);
-}
-
-function pin(color) {
-  return L.divIcon({
-    className: "",
-    html: `<div style="background:${color};width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
-    iconSize: [22, 22], iconAnchor: [11, 22], popupAnchor: [0, -20],
-  });
-}
-
-function renderMarkers(list) {
-  Object.values(markers).forEach(m => map.removeLayer(m));
-  markers = {};
-  const ids = new Set(list.map(p => p.id));
-  const bounds = [];
-  list.forEach(p => {
-    const m = L.marker([p.lat, p.lng], { icon: pin(catColor[p.category]) }).addTo(map);
-    m.bindPopup(
-      `<div class="pop"><h4>${p.source === "john" ? "🔔 " : ""}${p.name}</h4>` +
-      `<p>${catEmoji[p.category]} ${catLabel[p.category]} · ${priceStr(p)}${state.user && p._d != null ? " · " + fmtDist(p._d) : ""}</p>` +
-      `<button onclick="document.getElementById('card-${p.id}').scrollIntoView({behavior:'smooth',block:'center'});window.__exitMap&&window.__exitMap()">View details ↓</button></div>`
-    );
-    markers[p.id] = m;
-    bounds.push([p.lat, p.lng]);
-  });
-  if (state.user) bounds.push([state.user.lat, state.user.lng]);
-  if (bounds.length) {
-    try { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 }); } catch (e) {}
-  }
-}
-
-function focusPlace(id) {
+function openDetail(id) {
   const p = PLACES.find(x => x.id === id);
-  if (!p || !markers[id]) return;
-  if (window.innerWidth <= 860) enterMap();
-  map.setView([p.lat, p.lng], 16, { animate: true });
-  markers[id].openPopup();
+  if (!p) return;
+  S.selected = id;
+  const c = catColor[p.category];
+  const ds = d => `<div class="ds ${p.tripStatus[d].open ? "open" : "closed"}"><div class="ds-day">${d === "tue" ? "Tue Jun 30" : "Wed Jul 1"}</div>${p.tripStatus[d].open ? "● " : "✕ "}${esc(p.tripStatus[d].text)}</div>`;
+  const reviews = p.reviews.map(r => `<div class="d-rev"><div class="r-top">${esc(r.platform)}<span class="r-rate">${esc(r.rating)}</span></div><div class="r-quote">“${esc(r.quote)}”</div></div>`).join("");
+  const badges = `<span class="d-badge">${p.source === "john" ? "🔔 John's Pick" : "✨ Also recommended"}</span><span class="d-badge">${RES_LABEL[p.reservation]}</span>`;
+
+  el("detail-body").innerHTML = `
+    <div class="d-band" style="background:${c}">
+      <button class="d-close" data-detail-close>×</button>
+      <button class="d-back" data-detail-close>← Back</button>
+      <div class="d-cat">${catLabel[p.category]} · ${p.cuisine.join(" · ")}</div>
+      <div class="d-name">${esc(p.name)}</div>
+      <div class="d-badges">${badges}</div>
+    </div>
+    <div class="d-body">
+      <div class="d-status">${ds("tue")}${ds("wed")}</div>
+      <div class="d-rows">
+        <div class="d-row"><span class="d-ic">💵</span><span>${priceStr(p)} · ${esc(p.priceText)}</span></div>
+        <div class="d-row"><span class="d-ic">📍</span><a href="${mapsUrl(p)}" target="_blank" rel="noopener">${esc(p.address)}</a>${S.user && p._d != null ? `<span style="margin-left:auto;color:var(--accent);font-weight:600">${fmtDist(distMiles(S.user, p))}</span>` : ""}</div>
+        ${p.phone ? `<div class="d-row"><span class="d-ic">📞</span><a href="tel:${p.phone.replace(/[^0-9+]/g, "")}">${esc(p.phone)}</a></div>` : ""}
+        <div class="d-row"><span class="d-ic">🕒</span><span>${esc(p.hours)}</span></div>
+        <div class="d-row"><span class="d-ic">🎟️</span><span>${esc(p.resNote)}</span></div>
+      </div>
+      <div class="d-quote">${esc(p.why)}</div>
+      ${p.flag ? `<div class="d-flag">${esc(p.flag)}</div>` : ""}
+      <div class="d-reviews">${reviews}</div>
+      <div class="d-cta">
+        <a class="d-dir" href="${dirUrl(p)}" target="_blank" rel="noopener">${TRANSPORT[S.transport].emoji} Get Directions</a>
+        ${bookHTML(p) || (p.website ? `<a class="d-book" href="${p.website}" target="_blank" rel="noopener">🌐 Website</a>` : "")}
+      </div>
+    </div>`;
+
+  el("detail").classList.add("open");
+  el("detail-scrim").classList.add("show");
+  el("detail-body").scrollTop = 0;
+  document.querySelectorAll("[data-detail-close]").forEach(b => b.addEventListener("click", closeDetail));
+}
+function closeDetail() {
+  S.selected = null;
+  el("detail").classList.remove("open");
+  el("detail-scrim").classList.remove("show");
 }
 
-/* ---------- User location ---------- */
-function setUser(lat, lng, label) {
-  state.user = { lat, lng };
-  if (userMarker) map.removeLayer(userMarker);
-  userMarker = L.marker([lat, lng], {
-    icon: L.divIcon({ className: "", html: '<div class="user-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }),
-    zIndexOffset: 1000,
-  }).addTo(map).bindPopup("<div class='pop'><h4>📍 You are here</h4></div>");
-  const s = el("loc-status");
-  s.hidden = false; s.classList.remove("err");
-  s.textContent = "📍 Showing places near " + label + " — sorted by distance.";
-  renderCards();
-}
-
-function locate() {
-  if (!navigator.geolocation) return locErr("Geolocation isn't supported on this device — type an address instead.");
-  const s = el("loc-status"); s.hidden = false; s.classList.remove("err"); s.textContent = "Locating…";
-  navigator.geolocation.getCurrentPosition(
-    pos => setUser(pos.coords.latitude, pos.coords.longitude, "your current location"),
-    () => locErr("Couldn't get your location (permission denied?). Type your hotel/address instead."),
-    { enableHighAccuracy: true, timeout: 10000 }
-  );
-}
-function locErr(msg) {
-  const s = el("loc-status"); s.hidden = false; s.classList.add("err"); s.textContent = msg;
-}
-
-// Geocode a typed address via OpenStreetMap Nominatim (free, no key)
-async function geocode(q) {
-  const s = el("loc-status"); s.hidden = false; s.classList.remove("err"); s.textContent = "Looking up “" + q + "”…";
-  try {
-    const query = /phila|pa\b|pennsylvania/i.test(q) ? q : q + ", Philadelphia, PA";
-    const res = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(query));
-    const data = await res.json();
-    if (!data.length) return locErr("Couldn't find that address — try adding more detail.");
-    setUser(parseFloat(data[0].lat), parseFloat(data[0].lon), q);
-  } catch (e) {
-    locErr("Address lookup failed (network?). Try the 📍 button instead.");
-  }
-}
-
-/* ---------- Transport ---------- */
-function renderTransportSeg() {
-  el("transport-seg").innerHTML = Object.values(TRANSPORT).map(t =>
-    `<button class="seg-btn ${t.key === state.transport ? "active" : ""}" data-transport="${t.key}">${t.emoji} ${t.label}</button>`
-  ).join("");
-  document.querySelectorAll("[data-transport]").forEach(b =>
-    b.addEventListener("click", () => {
-      state.transport = b.dataset.transport;
-      document.querySelectorAll("[data-transport]").forEach(x => x.classList.toggle("active", x === b));
-      renderTransportTips(); renderCards();
-    }));
-}
-function renderTransportTips() {
-  const t = TRANSPORT[state.transport];
-  el("transport-tips").innerHTML =
-    `<div class="tt-card"><h3>${t.emoji} ${t.label}</h3>` +
-    `<p class="tt-summary">${t.summary}</p>` +
-    `<ul>${t.tips.map(x => `<li>${x}</li>`).join("")}</ul></div>`;
-}
-
-/* ---------- Category chips ---------- */
-function renderChips() {
-  const counts = {};
-  PLACES.forEach(p => {
-    if (state.source !== "all" && p.source !== state.source) return;
-    counts[p.category] = (counts[p.category] || 0) + 1;
-  });
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  let html = `<button class="chip ${state.category === "all" ? "active" : ""}" data-cat="all" style="${state.category === "all" ? "background:var(--navy)" : ""}">All <span class="count">${total}</span></button>`;
-  CATEGORIES.forEach(c => {
-    if (!counts[c.key]) return;
-    const active = state.category === c.key;
-    html += `<button class="chip ${active ? "active" : ""}" data-cat="${c.key}" style="${active ? "background:" + c.color : ""}">${c.emoji} ${c.label} <span class="count">${counts[c.key]}</span></button>`;
-  });
-  el("cat-chips").innerHTML = html;
-  document.querySelectorAll("[data-cat]").forEach(b =>
-    b.addEventListener("click", () => { state.category = b.dataset.cat; renderChips(); renderCards(); }));
-}
-
-/* ---------- Airport table ---------- */
-function renderAirport() {
-  el("airport-table").innerHTML =
-    `<table><thead><tr><th>Option</th><th>Cost</th><th>Time</th><th>Notes</th></tr></thead><tbody>` +
-    AIRPORT.map(a => `<tr><td><strong>${a.mode}</strong></td><td>${a.cost}</td><td>${a.time}</td><td>${a.note}</td></tr>`).join("") +
-    `</tbody></table>`;
-}
-
-/* ---------- 2-day plan generator (rule-based, no LLM) ---------- */
-const plan = {
-  interests: CATEGORIES.map(c => c.key), // all on by default
-  pace: "balanced",
-  maxPrice: 4,
-  walkInOnly: false,
-};
-const CENTER = { lat: 39.9526, lng: -75.1635 }; // City Hall — default route anchor
-
-function daypartsFor(p) { return DAYPART_OVERRIDE[p.id] || DAYPART_BY_CAT[p.category] || []; }
-
-// Weighted random among the top few candidates (lets "Regenerate" vary while staying good)
+/* ===========================================================
+   PLAN generator (rule-based, no LLM)
+   =========================================================== */
+const CENTER = { lat: 39.9526, lng: -75.1635 };
+const daypartsFor = p => DAYPART_OVERRIDE[p.id] || DAYPART_BY_CAT[p.category] || [];
 function pickWeighted(sorted) {
-  const top = sorted.slice(0, Math.min(3, sorted.length));
-  const weights = [3, 2, 1].slice(0, top.length);
-  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < top.length; i++) { if ((r -= weights[i]) < 0) return top[i].p; }
+  const top = sorted.slice(0, Math.min(3, sorted.length)), w = [3, 2, 1].slice(0, top.length);
+  let r = Math.random() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < top.length; i++) if ((r -= w[i]) < 0) return top[i].p;
   return top[0].p;
 }
-
-function generateDay(dayKey, usedGlobal) {
-  const slots = PACE_SLOTS[plan.pace];
-  const pool = PLACES.filter(p =>
-    p.tripStatus[dayKey].open &&                                  // hard: open that day
-    p.priceLevel <= plan.maxPrice &&                             // hard: budget
-    !(plan.walkInOnly && p.reservation === "required")          // hard: walk-in only
-  );
-  let anchor = state.user || CENTER;
+function generateDay(dayKey, used) {
+  const slots = PACE_SLOTS[S.plan.pace];
+  const pool = PLACES.filter(p => p.tripStatus[dayKey].open && p.priceLevel <= S.plan.maxPrice && !(S.plan.walkInOnly && p.reservation === "required"));
+  let anchor = S.user || CENTER;
   const usedDay = new Set();
-
   const blocks = slots.map(slot => {
-    const cands = pool.filter(p =>
-      !usedGlobal.has(p.id) && !usedDay.has(p.id) && daypartsFor(p).includes(slot.daypart));
-    const matching = cands.filter(p => plan.interests.includes(p.category));
+    const cands = pool.filter(p => !used.has(p.id) && !usedDay.has(p.id) && daypartsFor(p).includes(slot.daypart));
+    const matching = cands.filter(p => S.plan.interests.includes(p.category));
     const isMeal = MEAL_DAYPARTS.includes(slot.daypart);
-    // meals always fill (you have to eat); optional slots honor interests strictly
     const useList = matching.length ? matching : (isMeal ? cands : []);
     if (!useList.length) return { slot, place: null };
-
     const a = anchor;
     const scored = useList.map(p => {
-      let s = 0;
-      if (p.source === "john") s += 3;                  // favor John's picks
-      if (plan.interests.includes(p.category)) s += 4;  // favor chosen interests
-      s -= distMiles(a, p) * 0.6;                        // shorter hops win → a route
+      let s = 0; if (p.source === "john") s += 3; if (S.plan.interests.includes(p.category)) s += 4; s -= distMiles(a, p) * 0.6;
       return { p, s };
     }).sort((x, y) => y.s - x.s);
-
     const place = pickWeighted(scored);
-    usedDay.add(place.id); usedGlobal.add(place.id); anchor = place;
+    usedDay.add(place.id); used.add(place.id); anchor = place;
     return { slot, place };
   });
-
-  const closed = PLACES.filter(p =>
-    p.source === "john" && plan.interests.includes(p.category) && !p.tripStatus[dayKey].open);
+  const closed = PLACES.filter(p => p.source === "john" && S.plan.interests.includes(p.category) && !p.tripStatus[dayKey].open);
   return { blocks, closed };
 }
 
-function renderPlanConfig() {
-  const interestChips = CATEGORIES.map(c => {
-    const on = plan.interests.includes(c.key);
-    return `<button class="cfg-chip ${on ? "on" : ""}" data-int="${c.key}" style="${on ? "background:" + c.color + ";color:#fff;border-color:transparent" : ""}">${c.emoji} ${c.label}</button>`;
-  }).join("");
-  const seg = (arr, attr, cur) => arr.map(([v, l]) =>
-    `<button class="seg-btn ${String(cur) === String(v) ? "active" : ""}" data-${attr}="${v}">${l}</button>`).join("");
-  const loc = state.user ? "📍 Routed from your location" : "Routed from Center City — set your location above for a tighter route";
-  return `<div class="cfg">
-    <div class="cfg-row"><span class="control-label">Interests</span><div class="cfg-chips">${interestChips}</div></div>
-    <div class="cfg-row"><span class="control-label">Pace</span><div class="segmented">${seg([["relaxed", "🌿 Relaxed"], ["balanced", "⚖️ Balanced"], ["packed", "⚡ Packed"]], "pace", plan.pace)}</div></div>
-    <div class="cfg-row"><span class="control-label">Max budget</span><div class="segmented">${seg([[1, "$"], [2, "$$"], [3, "$$$"], [4, "$$$$"]], "budget", plan.maxPrice)}</div></div>
-    <div class="cfg-row"><span class="control-label">Bookings</span><div class="segmented">${seg([[false, "📅 I'll book ahead"], [true, "✅ Walk-ins only"]], "walk", plan.walkInOnly)}</div></div>
-    <div class="cfg-row cfg-actions"><button id="regen" class="hero-btn primary">🎲 Regenerate</button><span class="cfg-loc">${loc}</span></div>
-  </div>`;
-}
-
 function renderPlan() {
-  el("plan-config").innerHTML = renderPlanConfig();
-  document.querySelectorAll("[data-int]").forEach(b => b.addEventListener("click", () => {
-    const k = b.dataset.int, i = plan.interests.indexOf(k);
-    if (i >= 0) plan.interests.splice(i, 1); else plan.interests.push(k);
-    renderPlan();
-  }));
-  document.querySelectorAll("[data-pace]").forEach(b => b.addEventListener("click", () => { plan.pace = b.dataset.pace; renderPlan(); }));
-  document.querySelectorAll("[data-budget]").forEach(b => b.addEventListener("click", () => { plan.maxPrice = +b.dataset.budget; renderPlan(); }));
-  document.querySelectorAll("[data-walk]").forEach(b => b.addEventListener("click", () => { plan.walkInOnly = b.dataset.walk === "true"; renderPlan(); }));
-  el("regen") && el("regen").addEventListener("click", renderPlanDays);
+  // config
+  const interestChips = CATEGORIES.map(c => `<button class="cfg-chip ${S.plan.interests.includes(c.key) ? "on" : ""}" data-int="${c.key}" style="${S.plan.interests.includes(c.key) ? "background:" + c.color + ";color:#fff;border-color:transparent" : ""}">${c.emoji} ${c.label}</button>`).join("");
+  const segc = (arr, attr, cur) => arr.map(([v, l]) => `<button class="${String(cur) === String(v) ? "on" : ""}" data-${attr}="${v}">${l}</button>`).join("");
+  const loc = S.user ? "📍 Routed from your location" : "Routed from Center City — set location for a tighter route";
+  el("plan-config").innerHTML = `<div class="cfg">
+    <div class="cfg-row"><span class="sb-label">Interests</span><div class="cfg-chips">${interestChips}</div></div>
+    <div class="cfg-row"><span class="sb-label">Pace</span><div class="cfg-seg">${segc([["relaxed", "🌿 Relaxed"], ["balanced", "⚖️ Balanced"], ["packed", "⚡ Packed"]], "pace", S.plan.pace)}</div></div>
+    <div class="cfg-row"><span class="sb-label">Max budget</span><div class="cfg-seg">${segc([[1, "$"], [2, "$$"], [3, "$$$"], [4, "$$$$"]], "budget", S.plan.maxPrice)}</div></div>
+    <div class="cfg-row"><span class="sb-label">Bookings</span><div class="cfg-seg">${segc([[false, "📅 I'll book ahead"], [true, "✅ Walk-ins only"]], "walk", S.plan.walkInOnly)}</div></div>
+    <div class="cfg-row cfg-actions"><button class="btn-accent" id="regen">🎲 Regenerate</button><span class="cfg-loc">${loc}</span></div>
+  </div>`;
+
+  document.querySelectorAll("[data-int]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.int, i = S.plan.interests.indexOf(k); i >= 0 ? S.plan.interests.splice(i, 1) : S.plan.interests.push(k); renderPlan(); }));
+  document.querySelectorAll("[data-pace]").forEach(b => b.addEventListener("click", () => { S.plan.pace = b.dataset.pace; renderPlan(); }));
+  document.querySelectorAll("[data-budget]").forEach(b => b.addEventListener("click", () => { S.plan.maxPrice = +b.dataset.budget; renderPlan(); }));
+  document.querySelectorAll("[data-walk]").forEach(b => b.addEventListener("click", () => { S.plan.walkInOnly = b.dataset.walk === "true"; renderPlan(); }));
+  el("regen").addEventListener("click", renderPlanDays);
+
   renderPlanDays();
+  renderGetting();
 }
 
 function renderPlanDays() {
-  const usedGlobal = new Set();
-  el("itin-days").innerHTML = TRIP_DAYS.map(d => {
-    const { blocks, closed } = generateDay(d.key, usedGlobal);
+  const used = new Set();
+  el("plan-grid").innerHTML = TRIP_DAYS.map(d => {
+    const { blocks, closed } = generateDay(d.key, used);
     const rows = blocks.map(b => {
-      if (!b.place) {
-        return `<div class="itin-block"><div class="itin-time">${b.slot.time}</div><div><h4>${b.slot.label}</h4><p class="bdesc free">Free time — wander &amp; explore ✨</p></div></div>`;
-      }
-      const p = b.place;
-      const resTxt = p.reservation === "walkin" ? "walk-in" : p.reservation === "ticket" ? "ticket" : "reserve";
-      const dTxt = state.user ? " · " + fmtDist(distMiles(state.user, p)) : "";
-      return `<div class="itin-block"><div class="itin-time">${b.slot.time}</div><div>
+      if (!b.place) return `<div class="tl-block"><div class="tl-time">${b.slot.time}</div><div><h4>${b.slot.label}</h4><div class="tl-free">Free time — wander &amp; explore ✨</div></div></div>`;
+      const p = b.place, resTxt = p.reservation === "walkin" ? "walk-in" : p.reservation === "ticket" ? "ticket" : "reserve";
+      const dTxt = S.user ? " · " + fmtDist(distMiles(S.user, p)) : "";
+      return `<div class="tl-block"><div class="tl-time">${b.slot.time}</div><div>
         <h4>${b.slot.label}</h4>
-        <button class="itin-chip" data-goto="${p.id}"><span class="ichip-dot" style="background:${catColor[p.category]}"></span>${p.source === "john" ? "🔔 " : ""}${p.name}</button>
-        <p class="bdesc">${catEmoji[p.category]} ${catLabel[p.category]} · ${priceStr(p)} · ${resTxt}${dTxt}</p>
+        <button class="tl-place" data-open="${p.id}" style="--cat:${catColor[p.category]}">${p.source === "john" ? "🔔 " : ""}${esc(p.name)}</button>
+        <div class="tl-meta">${catLabel[p.category]} · ${priceStr(p)} · ${resTxt}${dTxt}</div>
       </div></div>`;
     }).join("");
-    const closedNote = closed.length
-      ? `<p class="itin-closed">⚠️ Closed ${d.label.split("·")[0].trim()} (skipped): ${closed.map(c => c.name).join(", ")}</p>` : "";
-    return `<div class="itin-day">
-      <div class="itin-day-head"><span class="pill">${d.label}</span><h3>${d.full}</h3>${closedNote}</div>
-      <div class="itin-blocks">${rows}</div>
-    </div>`;
+    const closedNote = closed.length ? `<div class="day-closed">⚠️ Closed ${d.label.split("·")[0].trim()} (skipped): ${closed.map(c => esc(c.name)).join(", ")}</div>` : "";
+    return `<div class="day-col"><div class="day-head"><span class="pill-tag">${d.label}</span><h3>${d.full}</h3>${closedNote}</div><div class="tl">${rows}</div></div>`;
   }).join("");
-
-  document.querySelectorAll("[data-goto]").forEach(btn => btn.addEventListener("click", () => {
-    closeItinerary();
-    const id = btn.dataset.goto;
-    setTimeout(() => {
-      const card = document.getElementById("card-" + id);
-      if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" });
-        card.classList.add("highlight"); setTimeout(() => card.classList.remove("highlight"), 1800); }
-    }, 60);
-  }));
+  document.querySelectorAll("#plan-grid [data-open]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.open)));
 }
 
-function openItinerary() {
-  renderPlan();
-  el("itinerary").hidden = false;
-  document.querySelector(".layout").style.display = "none";
-  el("transport-tips").style.display = "none";
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-function closeItinerary() {
-  el("itinerary").hidden = true;
-  document.querySelector(".layout").style.display = "";
-  el("transport-tips").style.display = "";
+function renderGetting() {
+  const trBtns = Object.values(TRANSPORT).map(t => `<button class="${t.key === S.transport ? "on" : ""}" data-tr="${t.key}">${t.emoji} ${t.label}</button>`).join("");
+  const t = TRANSPORT[S.transport];
+  el("getting").innerHTML = `<h3>Getting around</h3>
+    <div class="tr-toggle">${trBtns}</div>
+    <p class="tr-summary">${esc(t.summary)}</p>
+    <ul>${t.tips.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  document.querySelectorAll("[data-tr]").forEach(b => b.addEventListener("click", () => { S.transport = b.dataset.tr; renderGetting(); }));
 }
 
-/* ---------- Share ---------- */
-async function share() {
-  const url = location.href.split("#")[0];
-  const data = { title: "Philly Guide — your 2-day visit", text: "A hand-built guide to eating & exploring Philadelphia 🔔", url };
-  if (navigator.share) {
-    try { await navigator.share(data); return; } catch (e) { if (e.name === "AbortError") return; }
-  }
+/* ===========================================================
+   LOCATION
+   =========================================================== */
+function setUser(lat, lng, label) {
+  S.user = { lat, lng };
+  const s = el("sb-locstatus"); s.hidden = false; s.classList.remove("err");
+  s.textContent = "📍 Near " + label + " — sorted by distance.";
+  update();
+}
+function locStatus(msg, err) { const s = el("sb-locstatus"); s.hidden = false; s.classList.toggle("err", !!err); s.textContent = msg; }
+function locate() {
+  if (!navigator.geolocation) return locStatus("Geolocation unsupported — type an address.", true);
+  locStatus("Locating…");
+  navigator.geolocation.getCurrentPosition(
+    pos => setUser(pos.coords.latitude, pos.coords.longitude, "your location"),
+    () => locStatus("Couldn't get location — type your address instead.", true),
+    { enableHighAccuracy: true, timeout: 10000 });
+}
+async function geocode(q) {
+  locStatus("Looking up “" + q + "”…");
   try {
-    await navigator.clipboard.writeText(url);
-    flashShare("🔗 Link copied!");
-  } catch (e) { flashShare(url); }
-}
-function flashShare(msg) {
-  const btn = el("share-btn"); const orig = btn.textContent;
-  btn.textContent = msg; setTimeout(() => btn.textContent = orig, 1800);
+    const query = /phila|pa\b|pennsylvania/i.test(q) ? q : q + ", Philadelphia, PA";
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(query));
+    const d = await r.json();
+    if (!d.length) return locStatus("Couldn't find that address.", true);
+    setUser(parseFloat(d[0].lat), parseFloat(d[0].lon), q);
+  } catch (e) { locStatus("Lookup failed — try the 📍 button.", true); }
 }
 
-/* ---------- Mobile map view ---------- */
-function enterMap() {
-  el("map-pane").classList.add("show");
-  document.body.classList.add("map-mode");
-  el("view-map").classList.add("active"); el("view-list").classList.remove("active");
-  setTimeout(() => map.invalidateSize(), 60);
+/* ===========================================================
+   THEME + NAV + UPDATE
+   =========================================================== */
+function applyTheme() {
+  el("app").dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", S.theme === "A" ? "#151008" : "#0e0b08");
+  document.querySelectorAll("[data-theme-btn]").forEach(b => b.classList.toggle("on", b.dataset.themeBtn === S.theme));
+  try { localStorage.setItem("lore-theme", S.theme); } catch (e) {}
 }
-function exitMap() {
-  el("map-pane").classList.remove("show");
-  document.body.classList.remove("map-mode");
-  el("view-list").classList.add("active"); el("view-map").classList.remove("active");
-}
-window.__exitMap = () => { if (window.innerWidth <= 860) exitMap(); };
+function go(screen) { S.screen = screen; closeDetail(); update(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 
-/* ---------- Wire up ---------- */
+function update() { renderNav(); renderFilters(); renderScreen(); }
+
+/* ---------- init ---------- */
 function init() {
-  // banner
-  if (typeof BANNER !== "undefined") {
-    el("banner-title").textContent = BANNER.title;
-    el("banner-body").textContent = BANNER.body;
-    el("banner").hidden = false;
-    el("banner-close").addEventListener("click", () => el("banner").hidden = true);
-  }
+  injectLogos();
+  try { const t = localStorage.getItem("lore-theme"); if (t) S.theme = t; } catch (e) {}
+  applyTheme();
 
-  initMap();
-  renderTransportSeg();
-  renderTransportTips();
-  renderChips();
-  renderAirport();
-  renderCards();
+  document.querySelectorAll("[data-theme-btn]").forEach(b => b.addEventListener("click", () => { S.theme = b.dataset.themeBtn; applyTheme(); }));
+  el("hero-theme").addEventListener("click", () => { S.theme = S.theme === "A" ? "B" : "A"; applyTheme(); });
+  el("sb-locate").addEventListener("click", locate);
+  el("sb-addr").addEventListener("keydown", e => { if (e.key === "Enter") { const v = e.target.value.trim(); if (v) geocode(v); } });
+  el("detail-scrim").addEventListener("click", closeDetail);
+  window.addEventListener("resize", () => { const w = window.innerWidth; if ((w < 1024) !== (S.W < 1024)) { S.W = w; update(); } S.W = w; });
 
-  // source filter
-  document.querySelectorAll("[data-source]").forEach(b =>
-    b.addEventListener("click", () => {
-      state.source = b.dataset.source;
-      document.querySelectorAll("[data-source]").forEach(x => x.classList.toggle("active", x === b));
-      renderChips(); renderCards();
-    }));
-
-  // day filter
-  document.querySelectorAll("[data-day]").forEach(b =>
-    b.addEventListener("click", () => {
-      state.day = b.dataset.day;
-      document.querySelectorAll("[data-day]").forEach(x => x.classList.toggle("active", x === b));
-      renderCards();
-    }));
-
-  el("open-only").addEventListener("change", e => { state.openOnly = e.target.checked; renderCards(); });
-
-  // search (debounced-ish)
-  let t;
-  el("search").addEventListener("input", e => {
-    clearTimeout(t);
-    t = setTimeout(() => { state.query = e.target.value.trim(); renderCards(); }, 120);
-  });
-
-  // location
-  el("locate-btn").addEventListener("click", locate);
-  el("addr-go").addEventListener("click", () => { const v = el("addr-input").value.trim(); if (v) geocode(v); });
-  el("addr-input").addEventListener("keydown", e => { if (e.key === "Enter") { const v = e.target.value.trim(); if (v) geocode(v); } });
-
-  // view toggle (mobile)
-  el("view-map").addEventListener("click", enterMap);
-  el("view-list").addEventListener("click", exitMap);
-
-  // itinerary + share
-  el("plan-btn").addEventListener("click", openItinerary);
-  el("itin-close").addEventListener("click", closeItinerary);
-  el("share-btn").addEventListener("click", share);
-
-  // map close button (mobile)
-  const closeBtn = document.createElement("button");
-  closeBtn.className = "map-close"; closeBtn.textContent = "✕"; closeBtn.setAttribute("aria-label", "Close map");
-  closeBtn.addEventListener("click", exitMap);
-  el("map-pane").appendChild(closeBtn);
+  update();
 }
-
 document.addEventListener("DOMContentLoaded", init);
