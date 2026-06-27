@@ -512,7 +512,7 @@ function update() { el("app").dataset.screen = S.screen; renderNav(); renderFilt
 function init() {
   injectLogos();
   try { const t = localStorage.getItem("lore-theme"); if (t) S.theme = t; } catch (e) {}
-  const mustDefault = PLACES.filter(p => p.mustGo).map(p => p.id); // John's baked-in picks (shared)
+  const mustDefault = (typeof MUSTGO !== "undefined") ? MUSTGO : PLACES.filter(p => p.mustGo).map(p => p.id); // John's baked-in picks (shared)
   let mustSaved = [];
   try { mustSaved = JSON.parse(localStorage.getItem("lore-mustgo") || "[]"); } catch (e) {}
   S.must = new Set([...mustDefault, ...mustSaved]);

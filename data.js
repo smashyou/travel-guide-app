@@ -24,6 +24,12 @@ const CATEGORIES = [
   { key: "landmarks",    label: "Landmarks",    emoji: "🏛️", color: "#2e4a5e" },
 ];
 
+// John's baked-in must-go picks (shown pre-starred to everyone, on any device)
+const MUSTGO = [
+  "angelos", "suraya", "vernickfish", "dawa", "parc", "wawa", "nanzhou",
+  "davidsmailaiwah", "pho75", "skycafe", "southsichuan", "orientexpress", "beilers", "skyhigh",
+];
+
 const PLACES = [
   /* ---------------- CHEESESTEAKS (John's) ---------------- */
   {
