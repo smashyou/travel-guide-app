@@ -35,6 +35,8 @@ const S = {
   query: "",
   day: "any",
   src: "all",
+  must: new Set(),
+  mustOnly: false,
   selected: null,
   transport: "walk",
   user: null,
@@ -67,12 +69,21 @@ function dirUrl(p) {
 }
 const mapsUrl = p => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(p.address || p.name);
 
+/* ---------- must-go (starred) ---------- */
+function toggleMust(id) {
+  if (S.must.has(id)) S.must.delete(id); else S.must.add(id);
+  try { localStorage.setItem("lore-mustgo", JSON.stringify([...S.must])); } catch (e) {}
+  update();
+  if (S.selected && el("detail").classList.contains("open")) openDetail(S.selected);
+}
+
 /* ---------- filtering ---------- */
 function filtered() {
   let list = PLACES.slice();
   if (S.src !== "all") list = list.filter(p => p.source === S.src);
   if (S.cat) list = list.filter(p => p.category === S.cat);
   if (S.cuisine) list = list.filter(p => p.cuisine.includes(S.cuisine));
+  if (S.mustOnly) list = list.filter(p => S.must.has(p.id));
   if (S.day !== "any") list = list.filter(p => p.tripStatus[S.day].open);
   if (S.query) {
     const q = S.query.toLowerCase();
@@ -117,6 +128,7 @@ function renderFilters() {
   el("sb-cuisine").innerHTML = `<option value="">All cuisines</option>` +
     cuisineOptions().map(c => `<option value="${esc(c)}" ${S.cuisine === c ? "selected" : ""}>${esc(c)}</option>`).join("");
 
+  el("sb-must").classList.toggle("on", S.mustOnly);
   document.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { S.day = b.dataset.day; update(); }));
   document.querySelectorAll("[data-src]").forEach(b => b.addEventListener("click", () => { S.src = b.dataset.src; update(); }));
   el("sb-cat").addEventListener("change", () => { S.cat = el("sb-cat").value || null; update(); });
@@ -129,8 +141,8 @@ function renderFilters() {
 function cardHTML(p) {
   const dist = S.user && p._d != null ? `<span class="c-dist">${fmtDist(p._d)}</span>` : "";
   return `<button class="card" data-open="${p.id}" style="--cat:${catColor[p.category]}">
-    ${p.source === "john" ? '<span class="c-john">🔔</span>' : ""}
-    <div class="c-cat">${catLabel[p.category]}</div>
+    <span class="c-star ${S.must.has(p.id) ? "on" : ""}" data-star="${p.id}" title="${S.must.has(p.id) ? "On your must-go list" : "Add to must-go"}" role="button" aria-label="Toggle must-go">${S.must.has(p.id) ? "★" : "☆"}</span>
+    <div class="c-cat">${p.source === "john" ? "🔔 " : ""}${catLabel[p.category]}</div>
     <div class="c-name">${esc(p.name)}</div>
     <div class="c-blurb">${esc(p.blurb)}</div>
     <div class="c-tags">${p.cuisine.slice(0, 3).map(t => `<span class="c-tag">${esc(t)}</span>`).join("")}</div>
@@ -149,9 +161,15 @@ function screenHome() {
   const types = CATEGORIES.filter(c => counts[c.key]).map(c =>
     `<button class="type-chip" data-cat="${c.key}" style="--cat:${c.color}">${c.emoji} ${c.label} <span class="t-count">${counts[c.key]}</span></button>`).join("");
 
+  const mustList = PLACES.filter(p => S.must.has(p.id) && (S.day === "any" || p.tripStatus[S.day].open));
+  const mustSection = S.must.size ? `
+    <div class="section-head"><h2>⭐ John's must-go</h2><button class="section-link" data-seeall="must">See all →</button></div>
+    <div class="grid">${mustList.map(cardHTML).join("")}</div>` : "";
+
   return `
     ${bannerHTML()}
-    <div class="section-head"><h2>John's Picks</h2><button class="section-link" data-nav="browse">See all ${total} places →</button></div>
+    ${mustSection}
+    <div class="section-head"><h2>John's Picks</h2><button class="section-link" data-seeall="all">See all ${total} places →</button></div>
     <div class="grid">${johns.map(cardHTML).join("") || emptyHTML()}</div>
     <div class="section-head"><h2>Explore by type</h2></div>
     <div class="type-row">${types}</div>`;
@@ -176,6 +194,7 @@ function filterBarHTML() {
       <select id="fb-cat" class="fb-select" aria-label="Category"><option value="">All types</option>${cats}</select>
       <select id="fb-cuisine" class="fb-select" aria-label="Cuisine"><option value="">All cuisines</option>${cuis}</select>
       <button id="fb-john" class="fb-toggle ${S.src === "john" ? "on" : ""}">🔔 John's</button>
+      <button id="fb-must" class="fb-toggle ${S.mustOnly ? "on" : ""}">⭐ Must-go</button>
     </div>
   </div>`;
 }
@@ -184,11 +203,13 @@ function bindFilterBar(onSearch) {
   const cat = el("fb-cat"); if (cat) cat.addEventListener("change", () => { S.cat = cat.value || null; update(); });
   const cui = el("fb-cuisine"); if (cui) cui.addEventListener("change", () => { S.cuisine = cui.value || null; update(); });
   const john = el("fb-john"); if (john) john.addEventListener("click", () => { S.src = S.src === "john" ? "all" : "john"; update(); });
+  const must = el("fb-must"); if (must) must.addEventListener("click", () => { S.mustOnly = !S.mustOnly; update(); });
   const q = el("fb-q"); if (q) q.addEventListener("input", () => { S.query = q.value.trim(); onSearch(); });
 }
 
 function activeFilterText() {
   const bits = [];
+  if (S.mustOnly) bits.push("⭐ must-go");
   if (S.cat) bits.push(catLabel[S.cat]);
   if (S.cuisine) bits.push(S.cuisine);
   if (S.src === "john") bits.push("John's picks");
@@ -213,9 +234,11 @@ function screenBrowse() {
 function fillResults() {
   const host = el("results"); if (!host) return;
   const list = filtered();
+  const body = list.length
+    ? `<div class="grid">${list.map(cardHTML).join("")}</div>`
+    : (S.mustOnly ? `<div class="empty">No must-go places yet. Tap the ☆ on any place to add it to your list.</div>` : emptyHTML());
   host.innerHTML =
-    `<div class="result-count">${list.length} place${list.length === 1 ? "" : "s"}${activeFilterText()}${S.user ? " · sorted by distance" : ""}</div>
-     <div class="grid">${list.map(cardHTML).join("") || emptyHTML()}</div>`;
+    `<div class="result-count">${list.length} place${list.length === 1 ? "" : "s"}${activeFilterText()}${S.user ? " · sorted by distance" : ""}</div>${body}`;
   host.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.open)));
 }
 
@@ -259,6 +282,11 @@ function renderScreen() {
   // bindings (home type chips + any place cards outside the results region)
   document.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => openDetail(b.dataset.open)));
   document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { S.cat = S.cat === b.dataset.cat ? null : b.dataset.cat; S.screen = "browse"; update(); }));
+  document.querySelectorAll("[data-seeall]").forEach(b => b.addEventListener("click", () => {
+    S.cat = null; S.cuisine = null; S.query = ""; S.src = "all";
+    S.mustOnly = b.dataset.seeall === "must";
+    go("browse");
+  }));
   const bc = document.querySelector("[data-banner-close]");
   if (bc) bc.addEventListener("click", () => { S._bannerClosed = true; renderScreen(); });
 }
@@ -318,7 +346,7 @@ function openDetail(id) {
       <button class="d-back" data-detail-close>← Back</button>
       <div class="d-cat">${catLabel[p.category]} · ${p.cuisine.join(" · ")}</div>
       <div class="d-name">${esc(p.name)}</div>
-      <div class="d-badges">${badges}</div>
+      <div class="d-badges">${badges}<button class="d-starbtn ${S.must.has(p.id) ? "on" : ""}" data-star="${p.id}">${S.must.has(p.id) ? "★ On must-go" : "☆ Must-go"}</button></div>
     </div>
     <div class="d-body">
       <div class="d-status">${ds("tue")}${ds("wed")}</div>
@@ -484,13 +512,21 @@ function update() { el("app").dataset.screen = S.screen; renderNav(); renderFilt
 function init() {
   injectLogos();
   try { const t = localStorage.getItem("lore-theme"); if (t) S.theme = t; } catch (e) {}
+  try { S.must = new Set(JSON.parse(localStorage.getItem("lore-mustgo") || "[]")); } catch (e) {}
   applyTheme();
+
+  // star toggles (delegated, capture phase so card clicks don't open the detail)
+  document.addEventListener("click", e => {
+    const s = e.target.closest("[data-star]");
+    if (s) { e.preventDefault(); e.stopPropagation(); toggleMust(s.dataset.star); }
+  }, true);
 
   document.querySelectorAll("[data-theme-btn]").forEach(b => b.addEventListener("click", () => { S.theme = b.dataset.themeBtn; applyTheme(); }));
   el("hero-theme").addEventListener("click", () => { S.theme = S.theme === "A" ? "B" : "A"; applyTheme(); });
   el("sb-locate").addEventListener("click", locate);
   el("sb-addr").addEventListener("keydown", e => { if (e.key === "Enter") { const v = e.target.value.trim(); if (v) geocode(v); } });
   el("sb-q").addEventListener("input", () => { S.query = el("sb-q").value.trim(); onQueryChange(); });
+  el("sb-must").addEventListener("click", () => { S.mustOnly = !S.mustOnly; update(); });
   el("detail-scrim").addEventListener("click", closeDetail);
   window.addEventListener("resize", () => { const w = window.innerWidth; if ((w < 1024) !== (S.W < 1024)) { S.W = w; update(); } S.W = w; });
 
