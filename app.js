@@ -512,7 +512,10 @@ function update() { el("app").dataset.screen = S.screen; renderNav(); renderFilt
 function init() {
   injectLogos();
   try { const t = localStorage.getItem("lore-theme"); if (t) S.theme = t; } catch (e) {}
-  try { S.must = new Set(JSON.parse(localStorage.getItem("lore-mustgo") || "[]")); } catch (e) {}
+  const mustDefault = PLACES.filter(p => p.mustGo).map(p => p.id); // John's baked-in picks (shared)
+  let mustSaved = [];
+  try { mustSaved = JSON.parse(localStorage.getItem("lore-mustgo") || "[]"); } catch (e) {}
+  S.must = new Set([...mustDefault, ...mustSaved]);
   applyTheme();
 
   // star toggles (delegated, capture phase so card clicks don't open the detail)
