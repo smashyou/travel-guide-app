@@ -130,9 +130,9 @@ function renderFilters() {
 
   el("sb-must").classList.toggle("on", S.mustOnly);
   document.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { S.day = b.dataset.day; update(); }));
-  document.querySelectorAll("[data-src]").forEach(b => b.addEventListener("click", () => { S.src = b.dataset.src; update(); }));
-  el("sb-cat").addEventListener("change", () => { S.cat = el("sb-cat").value || null; update(); });
-  el("sb-cuisine").addEventListener("change", () => { S.cuisine = el("sb-cuisine").value || null; update(); });
+  document.querySelectorAll("[data-src]").forEach(b => b.addEventListener("click", () => { S.src = b.dataset.src; S.screen = "browse"; update(); }));
+  el("sb-cat").addEventListener("change", () => { S.cat = el("sb-cat").value || null; S.screen = "browse"; update(); });
+  el("sb-cuisine").addEventListener("change", () => { S.cuisine = el("sb-cuisine").value || null; S.screen = "browse"; update(); });
 }
 
 /* ===========================================================
@@ -528,8 +528,12 @@ function init() {
   el("hero-theme").addEventListener("click", () => { S.theme = S.theme === "A" ? "B" : "A"; applyTheme(); });
   el("sb-locate").addEventListener("click", locate);
   el("sb-addr").addEventListener("keydown", e => { if (e.key === "Enter") { const v = e.target.value.trim(); if (v) geocode(v); } });
-  el("sb-q").addEventListener("input", () => { S.query = el("sb-q").value.trim(); onQueryChange(); });
-  el("sb-must").addEventListener("click", () => { S.mustOnly = !S.mustOnly; update(); });
+  el("sb-q").addEventListener("input", () => {
+    S.query = el("sb-q").value.trim();
+    if (S.query && S.screen !== "browse" && S.screen !== "map") { S.screen = "browse"; update(); }
+    else onQueryChange();
+  });
+  el("sb-must").addEventListener("click", () => { S.mustOnly = !S.mustOnly; S.screen = "browse"; update(); });
   el("detail-scrim").addEventListener("click", closeDetail);
   window.addEventListener("resize", () => { const w = window.innerWidth; if ((w < 1024) !== (S.W < 1024)) { S.W = w; update(); } S.W = w; });
 
